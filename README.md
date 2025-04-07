@@ -39,3 +39,23 @@ Follow these steps to set up the Iron API for MLIR AIE:
 
 2. **Follow the instruction on the official github page**:
    - [Getting Started for AMD Ryzen™ AI on Linux](https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux)
+
+
+### Compilation
+
+To compile the design:
+```shell
+make
+```
+
+To compile the placed design:
+```shell
+env use_placed=1 make
+```
+
+To compile the C++ testbench:
+```shell
+make vector_vector_modulo.exe
+```
+
+
