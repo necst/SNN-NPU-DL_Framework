@@ -18,6 +18,8 @@
 
 #ifndef DATATYPES_USING_DEFINED
 #define DATATYPES_USING_DEFINED
+#define UNITARY_POTENTIAL 1
+#define LEAK 0.0f
 using DATATYPE = std::uint32_t; // Configure this to match your buffer data type
 #endif
 
@@ -118,21 +120,33 @@ int main(int argc, const char *argv[]) {
 
   // Build a vector with the output spike (ref) to compare with the bufOut[i]
   int errors = 0;
+  int32_t membrane_potential = 0;
   if (verbosity >= 1) {
     std::cout << "Verifying results ..." << std::endl;
   }
   for (uint32_t i = 0; i < IN_SIZE; i++) {
-    int32_t ref = bufInA[i] * scaleFactor;
-    int32_t test = bufOut[i];
-    if (test != ref) {
+    
+    int32_t input_spike = bufInA[i];
+    int32_t output_spike = 0; 
+    membrane_potential += input_spike * UNITARY_POTENTIAL;
+    membrane_potential -= LEAK;
+
+    if(membrane_potential >= threshold) {
+      output_spike = 1;
+      //Apply hard reset
+      membrane_potential = 0;
+    }
+
+    if(output_spike != bufOut[i]) {
       if (verbosity >= 1)
-        std::cout << "Error in output " << test << " != " << ref << std::endl;
+        std::cout << "Error in output " << bufOut[i] << " != " << output_spike << std::endl;
       errors++;
     } else {
       if (verbosity >= 1)
-        std::cout << "Correct output " << test << " == " << ref << std::endl;
+        std::cout << "Correct output " << bufOut[i] << " == " << output_spike << std::endl;
     }
   }
+
 
   // Print Pass/Fail result of our test
   if (!errors) {
