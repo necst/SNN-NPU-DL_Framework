@@ -67,27 +67,3 @@ clean_trace:
 
 clean: clean_trace
 	rm -rf build _build inst aie.mlir.prj core_* test.elf ${targetname}.exe
-        // Get current spike pattern
-        int32_t spikes = ext_elem(input_spikes, i);
-        
-        // Count spikes (number of set bits)
-        int32_t spike_count = 0;
-        for (int b = 0; b < 32; b++) {
-          if (spikes & (1 << b)) {
-            spike_count++;
-          }
-        }
-        
-        // Integrate spikes
-        membrane_potential += spike_count;
-        
-        // Check threshold
-        int32_t output = 0;
-        if (membrane_potential >= threshold) {
-          output = 1;  // Generate output spike
-          membrane_potential = reset_value;  // Reset membrane potential
-        }
-        
-        // Store output
-        output_spikes = upd_elem(output_spikes, i, output);
-      }
