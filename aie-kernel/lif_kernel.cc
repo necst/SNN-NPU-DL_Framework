@@ -9,6 +9,8 @@
 //===----------------------------------------------------------------------===//
 
 #define NOCPP
+#define UNITARY_POTENTIAL 1
+#define LEAK 0.0f
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -42,10 +44,18 @@ __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in,
       // Process each element in the vector
       // To have a comparison with what has been implemented in snnTorch use a vector of 16 spikes each of them encoded as 32 bit integer.
       for (int i = 0; i < VECTOR_SIZE; i++) {
+
         //Take one element out of the vector
         int32_t spike = ext_elem(input_spikes, i);  // One 32-bit spike value
-        membrane_potential += spike;
 
+        // Update the membrane potential if there is a spike
+        if(spike == 1){
+          membrane_potential += UNITARY_POTENTIAL;
+        }
+
+        // Apply leak to the membrane potential
+        membrane_potential -= LEAK;
+        
         //Initiliaze the output to zero and verify if there is a spike or not
         int32_t output = 0;
         if (membrane_potential >= threshold) {
@@ -57,7 +67,7 @@ __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in,
       }
       
       
-      // Store output vector
+      // Store output vector. outPtr point to a vector of 16 integer elements.
       *outPtr++ = output_spikes;
     }
   }
