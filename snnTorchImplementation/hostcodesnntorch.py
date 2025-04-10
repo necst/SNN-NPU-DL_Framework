@@ -215,7 +215,7 @@ def plot_reset_comparison(spk_in, mem_rec, spk_rec, mem_rec0, spk_rec0):
 """
 
 # Declaring the input vector. Ensure it will always be the same setting the seed to static
-num_steps = 128
+num_steps = 1024
 torch.manual_seed(123)
 # Create a 1-D random spike train. Each element has a probability of 40% of firing.
 spk_in = spikegen.rate_conv(torch.ones((num_steps,1)) * 0.40)
