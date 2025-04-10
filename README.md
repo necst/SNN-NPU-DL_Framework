@@ -48,14 +48,9 @@ To compile the design:
 make
 ```
 
-To compile the placed design:
+To execute the C++ testbench:
 ```shell
-env use_placed=1 make
-```
-
-To compile the C++ testbench:
-```shell
-make vector_vector_modulo.exe
+make run
 ```
 
 
