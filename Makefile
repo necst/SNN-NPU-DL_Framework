@@ -12,7 +12,7 @@ srcdir := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 include ${srcdir}/../../makefile-common
 
-targetname = lif_aie_array
+targetname = snn_neuron
 devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
 col = 0
 
