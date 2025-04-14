@@ -27,19 +27,15 @@ all: build/final.xclbin build/insts.bin
 
 VPATH := ${srcdir}/../../../aie_kernels/aie2
 
-build/%.cc.o: %.cc
+build/scale.o: ${srcdir}/lif_kernel_single32.cc
 	mkdir -p ${@D}
-ifeq ($(devicename),npu2)
-	cd ${@D} && ${PEANO_INSTALL_DIR}/bin/clang++ ${PEANOWRAP2P_FLAGS}  -c $< -o ${@F}
-else
-	cd ${@D} && ${PEANO_INSTALL_DIR}/bin/clang++ ${PEANOWRAP2_FLAGS}  -c $< -o ${@F}
-endif
+	cd ${@D} && ${PEANO_INSTALL_DIR}/bin/clang++ ${PEANOWRAP2_FLAGS} -c $< -o ${@F}
 
 build/aie.mlir: ${srcdir}/${aie_py_src}
 	mkdir -p ${@D}
 	python3 $< ${devicename} ${col} > $@
 
-build/final.xclbin: build/aie.mlir build/reduce_add.cc.o
+build/final.xclbin: build/aie.mlir build/scale.o
 	mkdir -p ${@D}
 	cd ${@D} && aiecc.py --aie-generate-xclbin --no-compile-host --xclbin-name=${@F} \
     	--no-xchesscc --no-xbridge --peano ${PEANO_INSTALL_DIR} \
@@ -54,7 +50,7 @@ ifeq "${powershell}" "powershell.exe"
 	cp _build/${targetname}.exe $@
 else
 	cp _build/${targetname} $@ 
-endif
+endif 
 
 run: ${targetname}.exe build/final.xclbin
 	${powershell} ./$< -x build/final.xclbin -i build/insts.bin -k MLIR_AIE
