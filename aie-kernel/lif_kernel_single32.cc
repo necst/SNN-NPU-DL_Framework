@@ -15,11 +15,9 @@
 
 #include <aie_api/aie.hpp>
 
-template <int N>
 __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in, 
                                             int32_t *restrict out,
                                             const int32_t threshold,
-                                            const int32_t height,
                                             const int32_t width) {
   event0();
 
@@ -33,11 +31,11 @@ __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in,
   v16int32 *restrict outPtr = (v16int32 *)out;
   v16int32 *restrict inPtr = (v16int32 *)in;
 
-  for (int j = 0; j < (height * width); j += VECTOR_SIZE) {
+  for (int j = 0; j < (width); j += VECTOR_SIZE) {
     chess_prepare_for_pipelining chess_loop_range(6, ) {
       // Load input spikes
       v16int32 input_spikes = *inPtr++;
-      v16int32 output_spikes = null_v16int32();
+      v16int32 output_spikes = undef_v16int32();
       
       // Process each element in the vector
       // To have a comparison with what has been implemented in snnTorch use a vector of 16 spikes each of them encoded as 32 bit integer.
@@ -68,15 +66,8 @@ __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in,
 
 extern "C" {
 
-void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t threshold, 
-                  int32_t, int32_t lineWidth) {
-  snnNeuron_aie_integer<16>(in, out, threshold, 1, lineWidth);
-}
-
-//No difference with the one above due to how the neuron has been implemented
-void snnNeuronTileInteger(int32_t *in, int32_t *out, int32_t threshold,
-                  int32_t reset_value, int32_t tileHeight, int32_t tileWidth) {
-  snnNeuron_aie_integer<16>(in, out, threshold, reset_value, tileHeight, tileWidth);
+void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t threshold, int32_t lineWidth) {
+  snnNeuron_aie_integer(in, out, threshold, lineWidth);
 }
 
 } // extern "C"
