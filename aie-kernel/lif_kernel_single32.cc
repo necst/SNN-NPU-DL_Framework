@@ -18,10 +18,9 @@
 __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in, 
                                             int32_t *restrict out,
                                             const int32_t threshold,
-                                            const int32_t width) {
+                                            const int32_t lineWidth) {
   event0();
 
-  // Since i cannot pipelined multiple sum over the same neuron maybe it is beneficial to implement multiple neurons on the same kernel.
   // Using 16 elements per vector since we're working with 32-bit integers
   constexpr int VECTOR_SIZE = 16;
 
