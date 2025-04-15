@@ -13,16 +13,15 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2
 from aie.iron.controlflow import range_
 
-PROBLEM_SIZE = 1024
-#MEM_TILE_WIDTH = 64
-AIE_TILE_WIDTH = 32
+PROBLEM_SIZE = 512
+AIE_TILE_WIDTH = 16
 THRESHOLD_SIZE = 1
 
-if len(sys.argv) > 1:
+if len(sys.argv) > 2:
     if sys.argv[1] == "npu":
         dev = NPU1Col1()
     elif sys.argv[1] == "npu2":
-        dev = NPU2()
+        dev = NPU2Col1()
     else:
         raise ValueError("[ERROR] Device name {} is unknown".format(sys.argv[1]))
 
@@ -32,6 +31,8 @@ def snn_neuron(dev):
     aie_tile_ty = np.ndarray[(AIE_TILE_WIDTH,), np.dtype[np.int32]]
     all_data_ty = np.ndarray[(PROBLEM_SIZE,), np.dtype[np.int32]]
     threshold_ty = np.ndarray[(THRESHOLD_SIZE,), np.dtype[np.int32]]
+
+    number_of_cycle = PROBLEM_SIZE // AIE_TILE_WIDTH
 
 
     # TODO check wheter the input size need to be all_data_ty
@@ -44,7 +45,7 @@ def snn_neuron(dev):
     # depth could be one in this case, no ping pong needed
     of_in_threshold = ObjectFifo(threshold_ty, name="in_threshold")
 
-    # object fifo between compute tiles and mem tiles
+    # object fifo between compute tiles and shit tiles
     of_out_spikes_0 = ObjectFifo(aie_tile_ty, name="out_threshold")
 
 
@@ -54,20 +55,24 @@ def snn_neuron(dev):
         "scale.o",
         [aie_tile_ty, threshold_ty, aie_tile_ty, np.int32],
     )
-    
+    membrane = 0;
     # Define a compute task to perform
-    def core_body(of_in_spikes_0, of_in_threshold, of_out_spikes_0, lif_neuron):
+    def core_body(of_in_spikes_0, of_in_threshold, of_out_spikes_0):
         # TODO check wheter it works without a loop of all data / aie tile
-        elem_in_spikes = of_in_spikes_0.acquire(1)
-        elem_in_threshold = of_in_threshold.acquire(1)
-        elem_out = of_out_spikes_0.acquire(1)
-        lif_neuron(elem_in_spikes, elem_in_threshold, elem_out, 1024)
-        of_in_spikes_0.release(1)
-        of_in_threshold.release(1)
-        of_out_spikes_0.release(1)
+        for _ in range_(number_of_cycle):
+            elem_in_spikes = of_in_spikes_0.acquire(1)
+            elem_in_threshold = of_in_threshold.acquire(1)
+            elem_out = of_out_spikes_0.acquire(1)
+            #lif_neuron(elem_in_spikes, elem_in_threshold, elem_out, 1024)
+            for i in range_(16):
+                elem_out[i] = 1
+
+            of_in_spikes_0.release(1)
+            of_in_threshold.release(1)
+            of_out_spikes_0.release(1)
 
     # Create a worker to run the task
-    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_in_threshold.cons(),of_out_spikes_0.prod(), lif_neuron])
+    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_in_threshold.cons(),of_out_spikes_0.prod()])
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
@@ -80,7 +85,7 @@ def snn_neuron(dev):
     # Place program components (assign them resources on the device) and generate an MLIR module
     return Program(dev, rt).resolve_program(SequentialPlacer())
 
-
+dev = NPU1Col1()
 module = snn_neuron(dev)
 res = module.operation.verify()
 if res == True:
