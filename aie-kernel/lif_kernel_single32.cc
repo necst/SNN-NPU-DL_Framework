@@ -15,12 +15,14 @@
 
 #include <aie_api/aie.hpp>
 
-__attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in, 
+int32_t membrane_potential = 0;
+
+__attribute__((noinline)) void snnNeuron_aie_integer_1(int32_t *restrict in, 
                                             int32_t *restrict out,
-                                            const int32_t threshold,
-                                            const int32_t lineWidth) {
+                                            const int32_t width) {
   event0();
 
+  // Since i cannot pipelined multiple sum over the same neuron maybe it is beneficial to implement multiple neurons on the same kernel.
   // Using 16 elements per vector since we're working with 32-bit integers
   constexpr int VECTOR_SIZE = 16;
 
@@ -44,13 +46,13 @@ __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in,
         membrane_potential += spike;
 
         //Initiliaze the output to zero and verify if there is a spike or not
-        int32_t output = 0;
-        if (membrane_potential >= threshold) {
-          output = 1;
+        int32_t output = spike;
+        if (membrane_potential >= 10) {
+          output = spike;
           membrane_potential = 0;
         }
       
-        output_spikes = upd_elem(output_spikes, i, output);
+        output_spikes = upd_elem(output_spikes, i, spike);
       }
       
       
@@ -63,10 +65,28 @@ __attribute__((noinline)) void snnNeuron_aie_integer(int32_t *restrict in,
   event1();
 }
 
+__attribute__((noinline)) void snnNeuron_aie_integer_(int32_t *restrict in, int32_t *restrict out, const int32_t width){
+    int32_t threshold = 10;
+    for(int i = 0; i < width; i++)
+    {
+        membrane_potential = membrane_potential + in[i];
+        if(membrane_potential >= threshold)
+        {
+            out[i] = 1;
+            membrane_potential = 0;
+        }
+        else
+        {
+            out[i] = 0;
+        }
+    }
+}
+
+
 extern "C" {
 
-void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t threshold, int32_t lineWidth) {
-  snnNeuron_aie_integer(in, out, threshold, lineWidth);
+void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t lineWidth) {
+  snnNeuron_aie_integer_(in, out, lineWidth);
 }
 
 } // extern "C"
