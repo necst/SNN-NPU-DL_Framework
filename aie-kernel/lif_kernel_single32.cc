@@ -15,55 +15,59 @@
 
 #include <aie_api/aie.hpp>
 
+//To mantain the same membrane accross the multiple subtiles managed
 int32_t membrane_potential = 0;
 
-__attribute__((noinline)) void snnNeuron_aie_integer_1(int32_t *restrict in, 
-                                            int32_t *restrict out,
-                                            const int32_t width) {
-  event0();
 
-  // Since i cannot pipelined multiple sum over the same neuron maybe it is beneficial to implement multiple neurons on the same kernel.
-  // Using 16 elements per vector since we're working with 32-bit integers
+__attribute__((noinline)) 
+void snn_neuron_aie_simd_(int32_t *restrict in, 
+                          int32_t *restrict out,
+                          const int32_t width) {
   constexpr int VECTOR_SIZE = 16;
 
-  // Initialize membrane potential
-  int32_t membrane_potential = 0;
+  // Vector registers for membrane potentials
+  
+  const aie::vector<int32, VECTOR_SIZE> v_reset = aie::broadcast<int32, VECTOR_SIZE>(0);
+  const aie::vector<int32, VECTOR_SIZE> v_threshold = aie::broadcast<int32, VECTOR_SIZE>(10);
+  const aie::vector<int32, VECTOR_SIZE> v_one = aie::broadcast<int32, VECTOR_SIZE>(1);
+  //aie::vector<int32, 16> v_membrane = aie::zeros<int32, 16>();
 
-  v16int32 *restrict outPtr = (v16int32 *)out;
-  v16int32 *restrict inPtr = (v16int32 *)in;
+  static aie::vector<int32, VECTOR_SIZE> g_membrane_potential = aie::zeros<int32, VECTOR_SIZE>();
+    
+  int32_t* inPtr = in;
+  int32_t* outPtr = out;
 
-  for (int j = 0; j < (width); j += VECTOR_SIZE) {
-    chess_prepare_for_pipelining chess_loop_range(6, ) {
-      // Load input spikes
-      v16int32 input_spikes = *inPtr++;
-      v16int32 output_spikes = undef_v16int32();
-      
-      // Process each element in the vector
-      // To have a comparison with what has been implemented in snnTorch use a vector of 16 spikes each of them encoded as 32 bit integer.
-      for (int i = 0; i < VECTOR_SIZE; i++) {
-        //Take one element out of the vector
-        int32_t spike = ext_elem(input_spikes, i);  // One 32-bit spike value
-        membrane_potential += spike;
+  for (int j = 0; j < width; j += VECTOR_SIZE) {
+    chess_prepare_for_pipelining
+    chess_loop_range(8, ) {
 
-        //Initiliaze the output to zero and verify if there is a spike or not
-        int32_t output = spike;
-        if (membrane_potential >= 10) {
-          output = spike;
-          membrane_potential = 0;
-        }
-      
-        output_spikes = upd_elem(output_spikes, i, spike);
-      }
-      
-      
-      // Store output vector
-      *outPtr++ = output_spikes;
+      // Load input spikes for 16 neurons
+      aie::vector<int32, VECTOR_SIZE> v_spikes = aie::load_v<VECTOR_SIZE>(inPtr);
+      inPtr += VECTOR_SIZE;
+
+      // 1. Update membrane potentials
+      g_membrane_potential = aie::add(g_membrane_potential, v_spikes);
+
+      // 2. Generate fire mask
+      auto v_fire_mask = aie::ge(g_membrane_potential, v_threshold);
+
+      // 3. Reset membrane where spike occurred
+      g_membrane_potential = aie::select(v_reset, g_membrane_potential, v_fire_mask);
+
+      // 4. Output spikes as 1s and 0s
+      aie::vector<int32, VECTOR_SIZE> v_output = aie::select(aie::zeros<int32, VECTOR_SIZE>(), v_one, v_fire_mask);
+
+
+      // Store output
+      aie::store_v(outPtr, v_output);
+      outPtr += VECTOR_SIZE;
     }
   }
 
-    //Compute the time taken by the main kernel
-  event1();
+  event1();  // Optional profiling/event marker
 }
+
+
 
 __attribute__((noinline)) void snnNeuron_aie_integer_(int32_t *restrict in, int32_t *restrict out, const int32_t width){
     int32_t threshold = 10;
@@ -87,6 +91,10 @@ extern "C" {
 
 void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t lineWidth) {
   snnNeuron_aie_integer_(in, out, lineWidth);
+}
+
+void snnNeuronLineSimd(int32_t *in, int32_t *out, int32_t lineWidth){
+  snn_neuron_aie_simd_(in, out, lineWidth);
 }
 
 } // extern "C"

@@ -15,7 +15,6 @@ from aie.iron.controlflow import range_
 
 PROBLEM_SIZE = 1024
 AIE_TILE_WIDTH = 128
-THRESHOLD_SIZE = 1
 
 if len(sys.argv) > 2:
     if sys.argv[1] == "npu":
@@ -45,24 +44,22 @@ def snn_neuron(dev):
 
 
     # Define the kernel function to call
-    lif_neuron = Kernel(
-        "snnNeuronLineInteger",
-        "scale.o",
-        [aie_tile_ty, aie_tile_ty, np.int32],
-    )
-
+    lif_neuron_sisd = Kernel("snnNeuronLineInteger","scale.o", [aie_tile_ty, aie_tile_ty, np.int32],)
+    
+    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, np.int32],)
+    
     # Define a compute task to perform
-    def core_body(of_in_spikes_0, of_out_spikes_0, lif_neuron):
+    def core_body(of_in_spikes_0, of_out_spikes_0, lif_neuron_simd):
         # TODO check wheter it works without a loop of all data / aie tile
         for _ in range_(number_of_cycle):
             elem_in_spikes = of_in_spikes_0.acquire(1)
             elem_out = of_out_spikes_0.acquire(1)
-            lif_neuron(elem_in_spikes, elem_out, 128)
+            lif_neuron_simd(elem_in_spikes, elem_out, AIE_TILE_WIDTH)
             of_in_spikes_0.release(1)
             of_out_spikes_0.release(1)
 
     # Create a worker to run the task
-    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_out_spikes_0.prod(), lif_neuron])
+    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_out_spikes_0.prod(), lif_neuron_sisd])
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
