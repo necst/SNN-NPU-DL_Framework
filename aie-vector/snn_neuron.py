@@ -13,8 +13,10 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2
 from aie.iron.controlflow import range_
 
+#Number of elements (32 bit integer)
 PROBLEM_SIZE = 1024
 AIE_TILE_WIDTH = 128
+MEMBRANE_SIZE = 16
 
 if len(sys.argv) > 2:
     if sys.argv[1] == "npu":
@@ -29,6 +31,7 @@ def snn_neuron(dev):
     # Define tensor types
     aie_tile_ty = np.ndarray[(AIE_TILE_WIDTH,), np.dtype[np.int32]]
     all_data_ty = np.ndarray[(PROBLEM_SIZE,), np.dtype[np.int32]]
+    membrane_ty = np.ndarray[(MEMBRANE_SIZE,), np.dtype[np.int32]]
 
     number_of_cycle = PROBLEM_SIZE // AIE_TILE_WIDTH
 
@@ -40,26 +43,34 @@ def snn_neuron(dev):
     of_in_spikes_0 = ObjectFifo(aie_tile_ty, name="in_spikes")
 
     # object fifo between compute tiles and shit tiles
-    of_out_spikes_0 = ObjectFifo(aie_tile_ty, name="out_threshold")
+    of_out_spikes_0 = ObjectFifo(aie_tile_ty, name="out_spikes")
 
+    of_in_membrane = ObjectFifo(membrane_ty, name="input_membrane", default_depth = 2)
 
     # Define the kernel function to call
     lif_neuron_sisd = Kernel("snnNeuronLineInteger","scale.o", [aie_tile_ty, aie_tile_ty, np.int32],)
     
-    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, np.int32],)
+    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.int32],)
     
     # Define a compute task to perform
-    def core_body(of_in_spikes_0, of_out_spikes_0, lif_neuron_simd):
-        # TODO check wheter it works without a loop of all data / aie tile
+    def core_body(of_in_spikes_0, of_out_spikes_0, of_in_membrane, of_out_membrane, lif_neuron):
+        init_mem = of_out_membrane.acquire(1)
+        for i in range_(MEMBRANE_SIZE):
+            init_mem[i] = 0
+        of_out_membrane.release(1)
         for _ in range_(number_of_cycle):
             elem_in_spikes = of_in_spikes_0.acquire(1)
             elem_out = of_out_spikes_0.acquire(1)
-            lif_neuron_simd(elem_in_spikes, elem_out, AIE_TILE_WIDTH)
+            elem_in_membrane = of_in_membrane.acquire(1)
+            elem_out_membrane = of_out_membrane.acquire(1)
+            lif_neuron(elem_in_spikes, elem_out, elem_in_membrane, elem_out_membrane, AIE_TILE_WIDTH)
             of_in_spikes_0.release(1)
             of_out_spikes_0.release(1)
+            of_in_membrane.release(1)
+            of_out_membrane.release(1)
 
     # Create a worker to run the task
-    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_out_spikes_0.prod(), lif_neuron_sisd])
+    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_out_spikes_0.prod(), of_in_membrane.cons(), of_in_membrane.prod(), lif_neuron_simd])
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
