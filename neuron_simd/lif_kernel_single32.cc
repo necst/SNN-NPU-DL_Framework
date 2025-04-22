@@ -15,13 +15,13 @@
 
 #include <aie_api/aie.hpp>
 
-//GLOBAL VARIABLES
+//HARDCODED GLOBAL VARIABLES
 constexpr int VECTOR_SIZE = 16;
+constexpr int THRESHOLD = 10;
+constexpr int RESET = 0;
 
 //To mantain the same membrane accross the multiple subtiles managed
 int32_t membrane_potential = 0;
-
-
 
 
 __attribute__((noinline)) 
@@ -34,8 +34,8 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
   // Vector registers for membrane potentials
   
-  const aie::vector<int32, VECTOR_SIZE> v_reset = aie::broadcast<int32, VECTOR_SIZE>(0);
-  const aie::vector<int32, VECTOR_SIZE> v_threshold = aie::broadcast<int32, VECTOR_SIZE>(10);
+  const aie::vector<int32, VECTOR_SIZE> v_reset = aie::broadcast<int32, VECTOR_SIZE>(RESET);
+  const aie::vector<int32, VECTOR_SIZE> v_threshold = aie::broadcast<int32, VECTOR_SIZE>(THRESHOLD);
   const aie::vector<int32, VECTOR_SIZE> v_one = aie::broadcast<int32, VECTOR_SIZE>(1);
   aie::vector<int32, VECTOR_SIZE> g_membrane_potential = aie::zeros<int32, VECTOR_SIZE>();
 
