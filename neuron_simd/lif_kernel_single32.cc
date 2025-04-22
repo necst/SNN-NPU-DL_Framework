@@ -19,6 +19,7 @@
 constexpr int VECTOR_SIZE = 16;
 constexpr int THRESHOLD = 10;
 constexpr int RESET = 0;
+constexpr int DECAY_FACTOR = 2;
 
 //To mantain the same membrane accross the multiple subtiles managed
 int32_t membrane_potential = 0;
@@ -37,6 +38,7 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
   const aie::vector<int32, VECTOR_SIZE> v_reset = aie::broadcast<int32, VECTOR_SIZE>(RESET);
   const aie::vector<int32, VECTOR_SIZE> v_threshold = aie::broadcast<int32, VECTOR_SIZE>(THRESHOLD);
   const aie::vector<int32, VECTOR_SIZE> v_one = aie::broadcast<int32, VECTOR_SIZE>(1);
+  const aie::vector<int32, VECTOR_SIZE> v_decay_factor = aie::broadcast<int32, VECTOR_SIZE>(DECAY_FACTOR);
   aie::vector<int32, VECTOR_SIZE> g_membrane_potential = aie::zeros<int32, VECTOR_SIZE>();
 
     
@@ -56,14 +58,18 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
       
       inPtr += VECTOR_SIZE;
 
-      // 1. Update membrane potentials
+      // 1. Multiply the membrane by the decay factor
+
+      g_membrane_potential = aie::mul(g_membrane_potential, decay_factor);
+
+      // 2. Update membrane potentials
       g_membrane_potential = aie::add(g_membrane_potential, v_spikes);
 
-      // 2. Generate fire mask
+      // 3. Generate fire mask
       auto v_fire_mask = aie::ge(g_membrane_potential, v_threshold);
 
       
-      // 3. Reset membrane where spike occurred
+      // 4. Reset membrane where spike occurred
       g_membrane_potential = aie::select(g_membrane_potential, v_reset, v_fire_mask);
 
       
