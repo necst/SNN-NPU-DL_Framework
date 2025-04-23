@@ -15,11 +15,7 @@
 
 #include <aie_api/aie.hpp>
 
-//HARDCODED GLOBAL VARIABLES
 constexpr int VECTOR_SIZE = 16;
-constexpr int THRESHOLD = 10;
-constexpr int RESET = 0;
-constexpr int DECAY_FACTOR = 2;
 
 //To mantain the same membrane accross the multiple subtiles managed
 int32_t membrane_potential = 0;
@@ -30,15 +26,28 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
                           int32_t *restrict out,
                           int32_t *restrict in_membrane,
                           int32_t *restrict out_membrane,
+                          const int32_t threshold,
+                          const int32_t decay_factor,
+                          const int32_t reset,
                           const int32_t width) {
   //constexpr int VECTOR_SIZE = 16;
 
   // Vector registers for membrane potentials
-  
-  const aie::vector<int32, VECTOR_SIZE> v_reset = aie::broadcast<int32, VECTOR_SIZE>(RESET);
-  const aie::vector<int32, VECTOR_SIZE> v_threshold = aie::broadcast<int32, VECTOR_SIZE>(THRESHOLD);
+
+  aie::vector<int32, VECTOR_SIZE> v_reset;
+    
+  if(reset == -1)
+  {
+    v_reset = aie::broadcast<int32, VECTOR_SIZE>(0);
+  }
+  else
+  {
+    v_reset = aie::broadcast<int32, VECTOR_SIZE>(reset); 
+  }
+      
+  const aie::vector<int32, VECTOR_SIZE> v_threshold = aie::broadcast<int32, VECTOR_SIZE>(threshold);
   const aie::vector<int32, VECTOR_SIZE> v_one = aie::broadcast<int32, VECTOR_SIZE>(1);
-  const aie::vector<int32, VECTOR_SIZE> v_decay_factor = aie::broadcast<int32, VECTOR_SIZE>(DECAY_FACTOR);
+  const aie::vector<int32, VECTOR_SIZE> v_decay_factor = aie::broadcast<int32, VECTOR_SIZE>(decay_factor);
   aie::vector<int32, VECTOR_SIZE> g_membrane_potential = aie::zeros<int32, VECTOR_SIZE>();
 
     
@@ -60,7 +69,10 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
       // 1. Multiply the membrane by the decay factor
 
-      g_membrane_potential = aie::mul(g_membrane_potential, decay_factor);
+      auto acc = aie::mul(g_membrane_potential, v_decay_factor);
+      // Mul return an accumulator vector
+      g_membrane_potential = aie::to_vector<int32>(acc);
+
 
       // 2. Update membrane potentials
       g_membrane_potential = aie::add(g_membrane_potential, v_spikes);
@@ -68,17 +80,21 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
       // 3. Generate fire mask
       auto v_fire_mask = aie::ge(g_membrane_potential, v_threshold);
 
-      
-      // 4. Reset membrane where spike occurred
-      g_membrane_potential = aie::select(g_membrane_potential, v_reset, v_fire_mask);
+      // 4. Reset membrane where spike occurred (if reset = -1 hard reset is        activated and membrane set to 0
+      if(reset == -1)
+      {
+         g_membrane_potential = aie::select(g_membrane_potential, v_reset, v_fire_mask);
+      }else
+      {
+         auto v_subtracted = aie::sub(g_membrane_potential, v_reset);
+g_membrane_potential = aie::select(g_membrane_potential, v_subtracted, v_fire_mask);
 
+      }
       
-      // 4. Output spikes as 1s and 0s
+      // 5. Output spikes as 1s and 0s
       aie::vector<int32, VECTOR_SIZE> v_output = aie::select(aie::zeros<int32, VECTOR_SIZE>(), v_one, v_fire_mask);
 
-
-      
-      // Store output
+      // 6. Store output
       aie::store_v(outPtr, v_output);
       outPtr += VECTOR_SIZE;
     }
@@ -91,15 +107,20 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
 
 
-__attribute__((noinline)) void snnNeuron_aie_integer_(int32_t *restrict in, int32_t *restrict out, const int32_t width){
-    int32_t threshold = 10;
+__attribute__((noinline)) void snnNeuron_aie_integer_(int32_t *restrict in, int32_t *restrict out, const int32_t threshold, int32_t decay_factor, int32_t reset, const int32_t width){
     for(int i = 0; i < width; i++)
     {
-        membrane_potential = membrane_potential + in[i];
+        membrane_potential = membrane_potential * decay_factor + in[i];
         if(membrane_potential >= threshold)
         {
             out[i] = 1;
-            membrane_potential = 0;
+            if(reset == -1)
+            {
+                membrane_potential = 0;
+            }else
+            {
+                membrane_potential -= reset;
+            }
         }
         else
         {
@@ -111,12 +132,12 @@ __attribute__((noinline)) void snnNeuron_aie_integer_(int32_t *restrict in, int3
 
 extern "C" {
 
-void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t lineWidth) {
-  snnNeuron_aie_integer_(in, out, lineWidth);
+void snnNeuronLineInteger(int32_t *in, int32_t *out, int32_t threshold, int32_t decay_factor, int32_t reset, int32_t lineWidth) {
+  snnNeuron_aie_integer_(in, out, threshold, decay_factor, reset, lineWidth);
 }
 
-void snnNeuronLineSimd(int32_t *in, int32_t *out, int32_t *inMem, int32_t *outMem, int32_t lineWidth){
-  snn_neuron_aie_simd_(in, out, inMem, outMem, lineWidth);
+void snnNeuronLineSimd(int32_t *in, int32_t *out, int32_t *inMem, int32_t *outMem, int32_t threshold, int32_t decay_factor, int32_t reset, int32_t lineWidth){
+  snn_neuron_aie_simd_(in, out, inMem, outMem, threshold, decay_factor, reset, lineWidth);
 }
 
 } // extern "C"

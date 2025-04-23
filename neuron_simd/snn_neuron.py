@@ -6,6 +6,7 @@
 #
 # (c) Copyright 2024 Advanced Micro Devices, Inc. or its affiliates
 import numpy as np
+import argparse
 import sys
 
 from aie.iron import ObjectFifo, Program, Runtime, Worker, Kernel
@@ -13,57 +14,51 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2
 from aie.iron.controlflow import range_
 
-#Number of elements (32 bit integer)
-PROBLEM_SIZE = 1024
-AIE_TILE_WIDTH = 128
-MEMBRANE_SIZE = 16
+def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset):
 
-if len(sys.argv) > 2:
-    if sys.argv[1] == "npu":
-        dev = NPU1Col1()
-    elif sys.argv[1] == "npu2":
-        dev = NPU2Col1()
-    else:
-        raise ValueError("[ERROR] Device name {} is unknown".format(sys.argv[1]))
+    input_spike = np.float32
+    out_spike = np.float32
+    tile_size = 128
+    membrane_size = 16
+    problem_size = in1_size // input_spike(0).nbytes
 
+    # Assertion
+    assert in1_size == out_size, "Input and output size must be the same"
+    assert membrane_size == 16, "Membrane buffer must have the same size as the AIE register till now"
+    assert reset == -1 or reset > 0, "Reset must be -1 if hard reset is required"
+    assert decay_factor <= 1 and decay_factor > 0, "Decay factor must be between 0 and 1"
 
-def snn_neuron(dev):
+    
     # Define tensor types
-    aie_tile_ty = np.ndarray[(AIE_TILE_WIDTH,), np.dtype[np.int32]]
-    all_data_ty = np.ndarray[(PROBLEM_SIZE,), np.dtype[np.int32]]
-    membrane_ty = np.ndarray[(MEMBRANE_SIZE,), np.dtype[np.int32]]
+    aie_tile_ty = np.ndarray[(tile_size,), np.dtype[np.int32]]
+    all_data_ty = np.ndarray[(problem_size,), np.dtype[np.int32]]
+    membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.int32]]
 
-    number_of_cycle = PROBLEM_SIZE // AIE_TILE_WIDTH
+    # Number of sub vector to iterate the worker on
+    number_sub_vectors = problem_size // tile_size
 
-
-    # TODO check wheter the input size need to be all_data_ty
-    # Object fifo for the input spikes
-    # Use the mem tiles to forward the data and make an implicit copy, instead of passing directly from the shim tiles
-    # To be clear: object fifo between shim tiles (L3) and compute tiles(L1)
+    # Object fifo declarations
     of_in_spikes_0 = ObjectFifo(aie_tile_ty, name="in_spikes")
 
-    # object fifo between compute tiles and shit tiles
     of_out_spikes_0 = ObjectFifo(aie_tile_ty, name="out_spikes")
 
     of_in_membrane = ObjectFifo(membrane_ty, name="input_membrane", default_depth = 2)
 
-    # Define the kernel function to call
     lif_neuron_sisd = Kernel("snnNeuronLineInteger","scale.o", [aie_tile_ty, aie_tile_ty, np.int32],)
     
-    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.int32],)
+    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.int32, np.int32, np.int32, np.int32],)
     
-    # Define a compute task to perform
     def core_body(of_in_spikes_0, of_out_spikes_0, of_in_membrane, of_out_membrane, lif_neuron):
         init_mem = of_out_membrane.acquire(1)
-        for i in range_(MEMBRANE_SIZE):
+        for i in range_(membrane_size):
             init_mem[i] = 0
         of_out_membrane.release(1)
-        for _ in range_(number_of_cycle):
+        for _ in range_(number_sub_vectors):
             elem_in_spikes = of_in_spikes_0.acquire(1)
             elem_out = of_out_spikes_0.acquire(1)
             elem_in_membrane = of_in_membrane.acquire(1)
             elem_out_membrane = of_out_membrane.acquire(1)
-            lif_neuron(elem_in_spikes, elem_out, elem_in_membrane, elem_out_membrane, AIE_TILE_WIDTH)
+            lif_neuron(elem_in_spikes, elem_out, elem_in_membrane, elem_out_membrane, threshold, decay_factor, reset, tile_size)
             of_in_spikes_0.release(1)
             of_out_spikes_0.release(1)
             of_in_membrane.release(1)
@@ -82,8 +77,39 @@ def snn_neuron(dev):
     # Place program components (assign them resources on the device) and generate an MLIR module
     return Program(dev, rt).resolve_program(SequentialPlacer())
 
-dev = NPU1Col1()
-module = snn_neuron(dev)
+if len(sys.argv) < 3:
+    raise ValueError(
+        "[ERROR] Need at least 3 arguments (dev, in1_size, out_size, threshold, decay factor, reset factor)"
+    )
+
+# Create an argument parser
+p = argparse.ArgumentParser()
+p.add_argument("-d", "--dev", required=True, dest="device", help="AIE Device")
+p.add_argument("-i1s", "--in1_size", required=True, dest="in1_size", help="Input 1 size of the spike")
+p.add_argument("-os", "--out_size", required=True, dest="out_size", help="Output size of the spike")
+p.add_argument("-th", "--threshold", required=True, dest="threshold", help="Threshold of the neurons")
+p.add_argument("-df", "--decay_factor", required=True, dest="decay_factor", help="Decay factor of the neurons")
+p.add_argument("-rs", "--reset", required=True, dest="reset_factor", help="Reset factor (-1 for hard reset)")
+
+opts = p.parse_args(sys.argv[1:])
+
+in1_size = int(opts.in1_size)
+if in1_size % 128:
+    print("Input size of the spike must be a multiple of 128 (so lenght is a multiple of 64")
+
+if opts.device == "npu":
+    dev = NPU1Col1()
+elif opts.device == "npu2":
+    dev = NPU2Col1()
+else:
+    raise ValueError("[ERROR] Device name {} is unknown".format(opts.device))
+
+out_size = int(opts.out_size)
+threshold = int(opts.threshold)
+decay_factor = int(opts.decay_factor)
+reset_factor = int(opts.reset_factor)
+
+module = snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset_factor)
 res = module.operation.verify()
 if res == True:
     print(module)

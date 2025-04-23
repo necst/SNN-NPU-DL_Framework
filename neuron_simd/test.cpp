@@ -22,7 +22,10 @@
 #include "test_utils.h"
 
 namespace po = boost::program_options;
+
+//Hardcoded variables to remove
 const int THRESHOLD = 10;
+const int DECAY_FACTOR = 1;
 const int IF_SIMD = 1;
 
 void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity);
@@ -159,6 +162,7 @@ int main(int argc, const char *argv[]) {
         int32_t expected_output;
         int32_t actual_output = buf_out_spikes[index];
 
+        membrane_potential = membrane_potential * DECAY_FACTOR;
         membrane_potential += input_spike;
 
         if (membrane_potential >= THRESHOLD) {
@@ -240,16 +244,15 @@ void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity){
     std::vector<int32_t> srcVecSpikes;
     srcVecSpikes.reserve(IN_SIZE); // Pre-allocate for efficiency
 
-    /*
     for (int i = 0; i < IN_SIZE; ++i) {
         srcVecSpikes.push_back(dist(gen) ? 1 : 0);
     }
-    */
 
+/*
     for (int i = 0; i < IN_SIZE; ++i) {
         srcVecSpikes.push_back(1);
     }
-    
+  */  
     // Copy to the buffer
     memcpy(buf_in_spikes, srcVecSpikes.data(), IN_SIZE * sizeof(int32_t));
 }

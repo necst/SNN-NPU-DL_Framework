@@ -12,9 +12,22 @@ srcdir := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 include ${srcdir}/../../makefile-common
 
+##=== Values to modify ===========================================================##
+## Input parameters (input size, output size, threshold, reset (-1 for hard reset)
+
+in1_size = 4096
+out_size = 4096 # must be equal to the in1_size
+threshold = 10
+decay_factor = 1
+reset = -1
+
+## Name of the .py array and col of the npu to choose
+
 targetname = snn_neuron
-devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
 col = 0
+
+
+devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
 
 aie_py_src=${targetname}.py
 use_placed?=0
@@ -33,7 +46,7 @@ build/scale.o: ${srcdir}/lif_kernel_single32.cc
 
 build/aie.mlir: ${srcdir}/${aie_py_src}
 	mkdir -p ${@D}
-	python3 $< ${devicename} ${col} > $@
+	python3 $< -d ${devicename} -i1s ${in1_size} -os ${out_size} -th ${threshold} -df ${decay_factor} -rs ${reset} > $@
 
 build/final.xclbin: build/aie.mlir build/scale.o
 	mkdir -p ${@D}
