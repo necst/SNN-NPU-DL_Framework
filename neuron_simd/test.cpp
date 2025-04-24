@@ -32,44 +32,48 @@ void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity);
 
 int main(int argc, const char *argv[]) {
 
-  // Program arguments parsing
-  po::options_description desc("Allowed options");
-  po::variables_map vm;
-  test_utils::add_default_options(desc);
+    // ------------------------------------------------------
+    // Parse program arguments
+    // ------------------------------------------------------
+    po::options_description desc("Allowed options");
+    po::variables_map vm;
+    test_utils::add_default_options(desc);
 
-  test_utils::parse_options(argc, argv, desc, vm);
-  int verbosity = vm["verbosity"].as<int>();
-  // Declaring design constants
-  constexpr bool VERIFY = true;
-  constexpr int IN_SIZE = 1024;
-  constexpr int OUT_SIZE = IN_SIZE;
+    test_utils::parse_options(argc, argv, desc, vm);
+    int verbosity = vm["verbosity"].as<int>();
+    int trace_size = vm["trace_sz"].as<int>();
+    std::string trace_file = vm["trace_file"].as<std::string>();
 
-  // Load instruction sequence
-  std::vector<uint32_t> instr_v =
-      test_utils::load_instr_binary(vm["instr"].as<std::string>());
+    // Declaring design constants
+    constexpr bool VERIFY = true;
+    constexpr int IN_SIZE = 1024;
+    constexpr int OUT_SIZE = IN_SIZE;
 
-  if (verbosity >= 1)
-    std::cout << "Sequence instr count: " << instr_v.size() << "\n";
+    // Load instruction sequence
+    std::vector<uint32_t> instr_v =
+        test_utils::load_instr_binary(vm["instr"].as<std::string>());
 
-  // ------------------------------------------------------
-  // Get device, load the xclbin & kernel and register them
-  // ------------------------------------------------------
-  // Get a device handle
-  unsigned int device_index = 0;
-  auto device = xrt::device(device_index);
+    if (verbosity >= 1)
+        std::cout << "Sequence instr count: " << instr_v.size() << "\n";
 
-  // Load the xclbin
-  if (verbosity >= 1)
-    std::cout << "Loading xclbin: " << vm["xclbin"].as<std::string>() << "\n";
-  auto xclbin = xrt::xclbin(vm["xclbin"].as<std::string>());
+    // ------------------------------------------------------
+    // Get device, load the xclbin & kernel and register them
+    // ------------------------------------------------------
+    unsigned int device_index = 0;
+    auto device = xrt::device(device_index);
 
-  // Load the kernel
-  if (verbosity >= 1)
-    std::cout << "Kernel opcode: " << vm["kernel"].as<std::string>() << "\n";
-  std::string Node = vm["kernel"].as<std::string>();
+    // Load the xclbin
+    if (verbosity >= 1)
+        std::cout << "Loading xclbin: " << vm["xclbin"].as<std::string>() << "\n";
+        auto xclbin = xrt::xclbin(vm["xclbin"].as<std::string>());
 
-  auto xkernels = xclbin.get_kernels();
-  auto xkernel = *std::find_if(xkernels.begin(), xkernels.end(),
+    // Load the kernel
+    if (verbosity >= 1)
+        std::cout << "Kernel opcode: " << vm["kernel"].as<std::string>() << "\n";
+        std::string Node = vm["kernel"].as<std::string>();
+
+    auto xkernels = xclbin.get_kernels();
+    auto xkernel = *std::find_if(xkernels.begin(), xkernels.end(),
                                [Node, verbosity](xrt::xclbin::kernel &k) {
                                  auto name = k.get_name();
                                  if (verbosity >= 1) {
@@ -77,7 +81,7 @@ int main(int argc, const char *argv[]) {
                                  }
                                  return name.rfind(Node, 0) == 0;
                                });
-  auto kernelName = xkernel.get_name();
+    auto kernelName = xkernel.get_name();
 
     // Register xclbin
     if (verbosity >= 1)
@@ -94,8 +98,10 @@ int main(int argc, const char *argv[]) {
         std::cout << "Getting handle to kernel:" << kernelName << "\n";
         auto kernel = xrt::kernel(context, kernelName);
 
-    // ------ FILL BUFFER --------------
-
+    // ------------------------------------------------------
+    // ------ FILL BUFFER -----------------------------------
+    // ------------------------------------------------------
+    
     // Setting up the object buffers
     auto bo_instr = xrt::bo(device, instr_v.size() * sizeof(int),
                           XCL_BO_FLAGS_CACHEABLE, kernel.group_id(1));
@@ -103,6 +109,8 @@ int main(int argc, const char *argv[]) {
                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
     auto bo_out_spikes = xrt::bo(device, OUT_SIZE * sizeof(int32_t),
                                XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4));
+
+    auto bo_trace = xrt::bo(device, trace_size, XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(7));
 
     if (verbosity >= 1)
         std::cout << "Writing data into buffer objects.\n";
@@ -115,11 +123,17 @@ int main(int argc, const char *argv[]) {
     void *bufInstr = bo_instr.map<void *>();
     memcpy(bufInstr, instr_v.data(), instr_v.size() * sizeof(int));
 
-
     uint32_t *buf_out_spikes = bo_out_spikes.map<uint32_t *>();
 
-    // SYNC HOST TO DEVICE MEMORIES //
+    char *bufTrace = bo_trace.map<char *>();
 
+    // ------------------------------------------------------
+    // SYNC HOST TO DEVICE MEMORIES -------------------------
+    // ------------------------------------------------------
+
+    if (trace_size > 0)
+        memset(bufTrace, 0, trace_size);
+    
     // sync host to device memories
     bo_instr.sync(XCL_BO_SYNC_BO_TO_DEVICE);
     bo_in_spikes.sync(XCL_BO_SYNC_BO_TO_DEVICE);
@@ -128,16 +142,34 @@ int main(int argc, const char *argv[]) {
     // Execute the kernel and wait to finish
     if (verbosity >= 1)
         std::cout << "Running Kernel.\n";
+
+    auto start = std::chrono::high_resolution_clock::now();
     unsigned int opcode = 3;
     auto run =
         kernel(opcode, bo_instr, instr_v.size(), bo_in_spikes, bo_out_spikes);
     run.wait();
 
+    std::cout<< "Execution finished" << std::endl;
+    auto stop = std::chrono::high_resolution_clock::now();
+    
     bo_out_spikes.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+
+    if (trace_size > 0)
+        bo_trace.sync(XCL_BO_SYNC_BO_TO_DEVICE);
   
-
+    // ------------------------------------------------------
     // COMPARING RESULT //
+    // ------------------------------------------------------
 
+    // Generate trace
+    if (trace_size > 0)
+        test_utils::write_out_trace(bufTrace, trace_size, trace_file);
+    
+    //Perfomance evaluator variables
+    float npu_time_total = 0;
+    float npu_time_min = 9999999;
+    float npu_time_max = 0;
+    int ret_val = 0;
 
     // Build a vector with the output spike (ref) to compare with the buf_out_spikes[i]
     int errors = 0;
@@ -145,9 +177,9 @@ int main(int argc, const char *argv[]) {
     int32_t test = 0;
     int32_t out = 0;
     
-    if (verbosity >= 1) {
-        std::cout << "Verifying results ..." << std::endl;
-    }
+    std::cout << "Verifying results ..." << std::endl;
+        
+    auto vstart = std::chrono::system_clock::now();
 
     const uint32_t NUM_NEURONS = 16;
     const uint32_t TIME_STEPS = IN_SIZE / NUM_NEURONS;
@@ -190,12 +222,36 @@ int main(int argc, const char *argv[]) {
         }
     }
 
-    if (errors == 0) {
-        std::cout << "All outputs are correct." << std::endl;
-    } else {
-        std::cout << "Total errors: " << errors << std::endl;
-    }
+    auto vstop = std::chrono::system_clock::now();
 
+    // ------------------------------------------------------
+    // PRINTING RESULT AND TIME SPENT
+    // ------------------------------------------------------
+
+    int n_iterations = TIME_STEPS * NUM_NEURONS;
+        
+    float vtime = std::chrono::duration_cast<std::chrono::seconds>(vstop - vstart).count();
+    std::cout << "Verify time: " << vtime << " secs." << std::endl;
+
+    float npu_time = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+    npu_time_total += npu_time;
+    npu_time_min = (npu_time < npu_time_min) ? npu_time : npu_time_min;
+    npu_time_max = (npu_time > npu_time_max) ? npu_time : npu_time_max;
+
+    float macs = 0;
+    std::cout << std::endl << "Avg NPU time: " << npu_time_total / n_iterations << " us." << std::endl;
+    if (macs > 0)
+        std::cout << "Avg NPU gflops: " << macs / (1000 * npu_time_total / n_iterations) << std::endl;
+    std::cout << std::endl << "Min NPU time: " << npu_time_min << " us." << std::endl;
+    if (macs > 0)
+        std::cout << "Max NPU gflops: " << macs / (1000 * npu_time_min) << std::endl;
+    std::cout << std::endl << "Max NPU time: " << npu_time_max << " us." << std::endl;
+    if (macs > 0)
+        std::cout << "Min NPU gflops: " << macs / (1000 * npu_time_max) << std::endl;
+
+    std::cout << std::endl << "FINISHED - Cleaning up." << std::endl; 
+    
+    
     /*
   for (uint32_t i = 0; i < IN_SIZE; i++) {
     ref += buf_in_spikes[i];

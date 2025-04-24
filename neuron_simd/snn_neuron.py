@@ -14,7 +14,7 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2
 from aie.iron.controlflow import range_
 
-def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset):
+def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, trace_size):
 
     input_spike = np.float32
     out_spike = np.float32
@@ -70,6 +70,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset):
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
     with rt.sequence(all_data_ty, all_data_ty) as (inTensor, outTensor):
+        #rt.enable_trace(trace_size, workers = [worker])
         rt.start(worker)
         rt.fill(of_in_spikes_0.prod(), inTensor)
         rt.drain(of_out_spikes_0.cons(), outTensor, wait=True)
@@ -90,6 +91,7 @@ p.add_argument("-os", "--out_size", required=True, dest="out_size", help="Output
 p.add_argument("-th", "--threshold", required=True, dest="threshold", help="Threshold of the neurons")
 p.add_argument("-df", "--decay_factor", required=True, dest="decay_factor", help="Decay factor of the neurons")
 p.add_argument("-rs", "--reset", required=True, dest="reset_factor", help="Reset factor (-1 for hard reset)")
+p.add_argument("-t", "--trace_size", required=False, dest="trace_size", default=0, help="Trace buffer size")
 
 opts = p.parse_args(sys.argv[1:])
 
@@ -108,8 +110,9 @@ out_size = int(opts.out_size)
 threshold = int(opts.threshold)
 decay_factor = int(opts.decay_factor)
 reset_factor = int(opts.reset_factor)
+trace_size = int(opts.trace_size)
 
-module = snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset_factor)
+module = snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset_factor, trace_size)
 res = module.operation.verify()
 if res == True:
     print(module)
