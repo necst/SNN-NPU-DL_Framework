@@ -25,7 +25,7 @@ namespace po = boost::program_options;
 
 //Hardcoded variables to remove
 const int THRESHOLD = 10;
-const int DECAY_FACTOR = 0.9;
+const float DECAY_FACTOR = 0.9;
 const int IF_SIMD = 1;
 
 void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity);
