@@ -25,7 +25,7 @@ namespace po = boost::program_options;
 
 //Hardcoded variables to remove
 const int THRESHOLD = 10;
-const float DECAY_FACTOR = 1.0;
+const float DECAY_FACTOR = 1.9;
 const int IF_SIMD = 1;
 
 void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity);
@@ -189,22 +189,28 @@ int main(int argc, const char *argv[]) {
     const uint32_t AIE_SIZE = MEM_SIZE / NUM_CORES; // Number of neurons in the architecture
     const uint32_t TIME_STEPS = AIE_SIZE / NUM_NEURONS_PER_CORE; // Number of time steps
     const uint32_t NUM_CALLED_CORE = IN_SIZE / MEM_SIZE;
+    uint32_t shift_neuron = 0;
 
     for (uint32_t neuron = 0; neuron < NUM_NEURONS; ++neuron)
     {
         float membrane_potential = 0;
 
+        if( neuron == 16 )
+            shift_neuron = 1;
+        
         for (uint32_t offset_neuron = 0; offset_neuron < NUM_CALLED_CORE; ++offset_neuron)
         {
 
             for (uint32_t t = 0; t < TIME_STEPS; ++t)
             {
-                uint32_t index = neuron + t * NUM_NEURONS * NUM_CORES + offset_neuron * MEM_SIZE;
+                uint32_t index = neuron - 16 * shift_neuron + t * NUM_NEURONS_PER_CORE + offset_neuron * MEM_SIZE + shift_neuron * 256;
 
                 int32_t input_spike = buf_in_spikes[index];
                 int32_t expected_output;
                 int32_t actual_output = buf_out_spikes[index];
 
+                std::cout << "Neuron" << neuron << " input:" << input_spike << " output:" << actual_output;
+                
                 membrane_potential = membrane_potential * DECAY_FACTOR;
                 membrane_potential += input_spike;
 

@@ -18,8 +18,8 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
 
     input_spike = np.float32
     out_spike = np.float32
-    tile_size = 128
-    mem_size = 256
+    tile_size = 256
+    mem_size = 512
     # Depending on the size of the aie register
     membrane_size = 16
     problem_size = in1_size // input_spike(0).nbytes
@@ -29,7 +29,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     assert in1_size == out_size, "Input and output size must be the same"
     assert membrane_size == 16, "Membrane buffer must have the same size as the AIE register till now"
     assert reset == -1 or reset > 0, "Reset must be -1 if hard reset is required"
-    assert decay_factor <= 1 and decay_factor > 0, "Decay factor must be between 0 and 1"
+    #assert decay_factor <= 1 and decay_factor > 0, "Decay factor must be between 0 and 1"
     assert n_cores % 2 == 0, "Num of cores must be a multiple of 2"
 
     
@@ -40,7 +40,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float32]]
     
     # Number of sub vector to iterate the worker on
-    number_sub_vectors = problem_size // tile_size
+    number_sub_vectors = problem_size // mem_size
 
     # Object fifo declarations
     
