@@ -191,63 +191,63 @@ int main(int argc, const char *argv[]) {
     const uint32_t NUM_CALLED_CORE = IN_SIZE / MEM_SIZE;
     uint32_t shift_neuron = 0;
 
-    for (uint32_t neuron = 0; neuron < NUM_NEURONS; ++neuron)
+    for (uint32_t set_of_neurons = 0; set_of_neurons < NUM_NEURONS / NUM_NEURONS_PER_CORE; ++set_of_neurons)
     {
-        float membrane_potential = 0;
 
-        if( neuron == 16 )
-            shift_neuron = 1;
-        
-        for (uint32_t offset_neuron = 0; offset_neuron < NUM_CALLED_CORE; ++offset_neuron)
+        for (uint32_t neuron = 0; neuron < NUM_NEURONS / 2; ++neuron)
         {
+            float membrane_potential = 0;
 
-            for (uint32_t t = 0; t < TIME_STEPS; ++t)
+            for (uint32_t offset_neuron = 0; offset_neuron < NUM_CALLED_CORE; ++offset_neuron)
             {
-                uint32_t index = neuron - 16 * shift_neuron + t * NUM_NEURONS_PER_CORE + offset_neuron * MEM_SIZE + shift_neuron * 256;
 
-                int32_t input_spike = buf_in_spikes[index];
-                int32_t expected_output;
-                int32_t actual_output = buf_out_spikes[index];
-
-                std::cout << "Neuron" << neuron << " input:" << input_spike << " output:" << actual_output;
-                
-                membrane_potential = membrane_potential * DECAY_FACTOR;
-                membrane_potential += input_spike;
-
-                if (membrane_potential >= THRESHOLD)
+                for (uint32_t t = 0; t < TIME_STEPS; ++t)
                 {
-                    expected_output = 1;
-                    membrane_potential = 0;
-                }
-                else
-                {
-                    expected_output = 0;
-                }
+                    uint32_t index = neuron + t * NUM_NEURONS_PER_CORE + offset_neuron * MEM_SIZE + set_of_neurons * AIE_SIZE;
 
-                if (expected_output != actual_output)
-                {
-                    if (verbosity >= 1)
+                    int32_t input_spike = buf_in_spikes[index];
+                    int32_t expected_output;
+                    int32_t actual_output = buf_out_spikes[index];
+
+                    std::cout << "Neuron" << neuron << " input:" << input_spike << " output:" << actual_output;
+
+                    membrane_potential = membrane_potential * DECAY_FACTOR;
+                    membrane_potential += input_spike;
+
+                    if (membrane_potential >= THRESHOLD)
                     {
-                        std::cout << "Mismatch at neuron " << neuron
-                                  << ", time step " << t
-                                  << ": expected " << expected_output
-                                  << ", got " << actual_output << std::endl;
+                        expected_output = 1;
+                        membrane_potential = 0;
                     }
-                    ++errors;
-                }
-                else
-                {
-                    if (verbosity >= 2)
+                    else
                     {
-                        std::cout << "Correct at neuron " << neuron
-                                  << ", time step " << t
-                                  << ": output " << actual_output << std::endl;
+                        expected_output = 0;
+                    }
+
+                    if (expected_output != actual_output)
+                    {
+                        if (verbosity >= 1)
+                        {
+                            std::cout << "Mismatch at neuron " << neuron
+                                      << ", time step " << t
+                                      << ": expected " << expected_output
+                                      << ", got " << actual_output << std::endl;
+                        }
+                        ++errors;
+                    }
+                    else
+                    {
+                        if (verbosity >= 2)
+                        {
+                            std::cout << "Correct at neuron " << neuron
+                                      << ", time step " << t
+                                      << ": output " << actual_output << std::endl;
+                        }
                     }
                 }
             }
         }
     }
-
 
     auto vstop = std::chrono::system_clock::now();
 
