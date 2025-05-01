@@ -182,7 +182,7 @@ int main(int argc, const char *argv[]) {
         
     auto vstart = std::chrono::system_clock::now();
 
-    const uint32_t NUM_NEURONS = 16;
+    const uint32_t NUM_NEURONS = 32;
     const uint32_t TIME_STEPS = IN_SIZE / NUM_NEURONS;
 
     for (uint32_t neuron = 0; neuron < NUM_NEURONS; ++neuron) {

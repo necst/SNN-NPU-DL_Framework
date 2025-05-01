@@ -25,7 +25,7 @@ namespace po = boost::program_options;
 
 //Hardcoded variables to remove
 const int THRESHOLD = 10;
-const int DECAY_FACTOR = 0.9;
+const float DECAY_FACTOR = 1.0;
 const int IF_SIMD = 1;
 
 void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity);
@@ -182,46 +182,66 @@ int main(int argc, const char *argv[]) {
         
     auto vstart = std::chrono::system_clock::now();
 
-    const uint32_t NUM_NEURONS = 16;
-    const uint32_t TIME_STEPS = IN_SIZE / NUM_NEURONS;
+    const uint32_t NUM_CORES = 2; // Number of compute tiles used in the architecture
+    const uint32_t NUM_NEURONS = 32; // Number of neurons in the architecture
+    const uint32_t NUM_NEURONS_PER_CORE = 16;
+    const uint32_t MEM_SIZE = IN_SIZE / 2; // Adjsut as needed
+    const uint32_t AIE_SIZE = MEM_SIZE / NUM_CORES; // Number of neurons in the architecture
+    const uint32_t TIME_STEPS = AIE_SIZE / NUM_NEURONS_PER_CORE; // Number of time steps
+    const uint32_t NUM_CALLED_CORE = IN_SIZE / MEM_SIZE;
 
-    for (uint32_t neuron = 0; neuron < NUM_NEURONS; ++neuron) {
+    for (uint32_t neuron = 0; neuron < NUM_NEURONS; ++neuron)
+    {
         float membrane_potential = 0;
 
-    for (uint32_t t = 0; t < TIME_STEPS; ++t) {
-        uint32_t index = neuron + t * NUM_NEURONS;
+        for (uint32_t offset_neuron = 0; offset_neuron < NUM_CALLED_CORE; ++offset_neuron)
+        {
 
-        int32_t input_spike = buf_in_spikes[index];
-        int32_t expected_output;
-        int32_t actual_output = buf_out_spikes[index];
+            for (uint32_t t = 0; t < TIME_STEPS; ++t)
+            {
+                uint32_t index = neuron + t * NUM_NEURONS * NUM_CORES + offset_neuron * MEM_SIZE;
 
-        membrane_potential = membrane_potential * DECAY_FACTOR;
-        membrane_potential += input_spike;
+                int32_t input_spike = buf_in_spikes[index];
+                int32_t expected_output;
+                int32_t actual_output = buf_out_spikes[index];
 
-        if (membrane_potential >= THRESHOLD) {
-            expected_output = 1;
-            membrane_potential = 0;
-        } else {
-            expected_output = 0;
-        }
+                membrane_potential = membrane_potential * DECAY_FACTOR;
+                membrane_potential += input_spike;
 
-    if (expected_output != actual_output) {
-        if (verbosity >= 1) {
-        std::cout << "Mismatch at neuron " << neuron
-                  << ", time step " << t
-                  << ": expected " << expected_output
-                  << ", got " << actual_output << std::endl;
-        }
-        ++errors;
-    } else {
-        if (verbosity >= 2) {
-            std::cout << "Correct at neuron " << neuron
-                  << ", time step " << t
-                  << ": output " << actual_output << std::endl;
+                if (membrane_potential >= THRESHOLD)
+                {
+                    expected_output = 1;
+                    membrane_potential = 0;
+                }
+                else
+                {
+                    expected_output = 0;
+                }
+
+                if (expected_output != actual_output)
+                {
+                    if (verbosity >= 1)
+                    {
+                        std::cout << "Mismatch at neuron " << neuron
+                                  << ", time step " << t
+                                  << ": expected " << expected_output
+                                  << ", got " << actual_output << std::endl;
+                    }
+                    ++errors;
+                }
+                else
+                {
+                    if (verbosity >= 2)
+                    {
+                        std::cout << "Correct at neuron " << neuron
+                                  << ", time step " << t
+                                  << ": output " << actual_output << std::endl;
+                    }
                 }
             }
         }
     }
+
 
     auto vstop = std::chrono::system_clock::now();
 
@@ -229,7 +249,7 @@ int main(int argc, const char *argv[]) {
     // PRINTING RESULT AND TIME SPENT
     // ------------------------------------------------------
 
-    int n_iterations = TIME_STEPS * NUM_NEURONS;
+    int n_iterations = TIME_STEPS * NUM_NEURONS_PER_CORE;
         
     float vtime = std::chrono::duration_cast<std::chrono::seconds>(vstop - vstart).count();
     std::cout << "Verify time: " << vtime << " secs." << std::endl;
