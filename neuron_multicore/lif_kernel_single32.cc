@@ -20,21 +20,7 @@
 
 constexpr int VECTOR_SIZE = 16;
 
-
-inline aie::vector<int32_t, VECTOR_SIZE> convert_to_output_type(aie::vector<float, VECTOR_SIZE> vec) {
-    aie::accum<acc32, VECTOR_SIZE> acc;
-    acc.from_vector(vec, 0);
-    return acc.to_vector<int32_t>();
-}
-
-inline aie::vector<float, VECTOR_SIZE> convert_to_input_type(aie::vector<int32_t, VECTOR_SIZE> vec) {
-    aie::accum<acc32, VECTOR_SIZE> acc;
-    acc.from_vector(vec, 0);
-    return acc.to_vector<float>();
-}
-
-
-
+template <typename T, int N>
 __attribute__((noinline)) 
 void snn_neuron_aie_simd_(int32_t *restrict in, 
                           int32_t *restrict out,
@@ -120,8 +106,16 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
 extern "C" {
 
+#if BIT_WIDTH == 16
+
+void snnNeuronLineSimd(int16_t *in, int16_t *out, float *inMem, float *outMem, float threshold, float decay_factor, float reset, int32_t hard_reset, int32_t lineWidth){
+  snn_neuron_aie_simd_<int16_t, 32>(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
+}
+
+#if BIT_WIDTH == 32
+
 void snnNeuronLineSimd(int32_t *in, int32_t *out, float *inMem, float *outMem, float threshold, float decay_factor, float reset, int32_t hard_reset, int32_t lineWidth){
-  snn_neuron_aie_simd_(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
+  snn_neuron_aie_simd_<int32_t, 16>(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
 }
 
 } // extern "C"
