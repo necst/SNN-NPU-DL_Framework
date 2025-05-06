@@ -304,7 +304,6 @@ void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity){
         srcVecSpikes.push_back(dist(gen) ? 1 : 0);
     }
 */
-te
     for (int i = 0; i < IN_SIZE; ++i) {
         srcVecSpikes.push_back(1);
     }
