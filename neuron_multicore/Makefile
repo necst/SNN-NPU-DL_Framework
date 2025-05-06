@@ -18,8 +18,8 @@ include ${srcdir}/../../makefile-common
 # Input size and output size in byte
 in1_size = 4096
 out_size = 4096 # must be equal to the in1_size
-threshold = 10
-decay_factor = 1.0
+threshold = 5
+decay_factor = 0.9
 reset = -1
 hard_reset = 1
 trace_size = 8192

@@ -24,8 +24,8 @@
 namespace po = boost::program_options;
 
 //Hardcoded variables to remove
-const int THRESHOLD = 10;
-const float DECAY_FACTOR = 1.9;
+const int THRESHOLD = 5;
+const float DECAY_FACTOR = 0.9;
 const int IF_SIMD = 1;
 
 void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity);
@@ -185,7 +185,7 @@ int main(int argc, const char *argv[]) {
     const uint32_t NUM_CORES = 2; // Number of compute tiles used in the architecture
     const uint32_t NUM_NEURONS = 32; // Number of neurons in the architecture
     const uint32_t NUM_NEURONS_PER_CORE = 16;
-    const uint32_t MEM_SIZE = IN_SIZE / 2; // Adjsut as needed
+    const uint32_t MEM_SIZE = 512; // Adjsut as needed
     const uint32_t AIE_SIZE = MEM_SIZE / NUM_CORES; // Number of neurons in the architecture
     const uint32_t TIME_STEPS = AIE_SIZE / NUM_NEURONS_PER_CORE; // Number of time steps
     const uint32_t NUM_CALLED_CORE = IN_SIZE / MEM_SIZE;
@@ -204,15 +204,15 @@ int main(int argc, const char *argv[]) {
                 for (uint32_t t = 0; t < TIME_STEPS; ++t)
                 {
                     uint32_t index = neuron + t * NUM_NEURONS_PER_CORE + offset_neuron * MEM_SIZE + set_of_neurons * AIE_SIZE;
-
+                    
                     int32_t input_spike = buf_in_spikes[index];
                     int32_t expected_output;
                     int32_t actual_output = buf_out_spikes[index];
 
-                    std::cout << "Neuron" << neuron << " input:" << input_spike << " output:" << actual_output;
+                    std::cout << "Neuron" << neuron << " input:" << input_spike << " output:" << actual_output << "\n";
 
                     membrane_potential = membrane_potential * DECAY_FACTOR;
-                    membrane_potential += input_spike;
+                    membrane_potential += (float)input_spike;
 
                     if (membrane_potential >= THRESHOLD)
                     {
@@ -228,7 +228,7 @@ int main(int argc, const char *argv[]) {
                     {
                         if (verbosity >= 1)
                         {
-                            std::cout << "Mismatch at neuron " << neuron
+                            std::cout << " Mismatch at neuron " << neuron
                                       << ", time step " << t
                                       << ": expected " << expected_output
                                       << ", got " << actual_output << std::endl;
@@ -239,7 +239,7 @@ int main(int argc, const char *argv[]) {
                     {
                         if (verbosity >= 2)
                         {
-                            std::cout << "Correct at neuron " << neuron
+                            std::cout << " Correct at neuron " << neuron
                                       << ", time step " << t
                                       << ": output " << actual_output << std::endl;
                         }
@@ -255,7 +255,7 @@ int main(int argc, const char *argv[]) {
     // PRINTING RESULT AND TIME SPENT
     // ------------------------------------------------------
 
-    int n_iterations = TIME_STEPS * NUM_NEURONS_PER_CORE;
+    int n_iterations = TIME_STEPS * (NUM_NEURONS * NUM_NEURONS_PER_CORE) * (NUM_NEURONS / 2) * NUM_CALLED_CORE;
         
     float vtime = std::chrono::duration_cast<std::chrono::seconds>(vstop - vstart).count();
     std::cout << "Verify time: " << vtime << " secs." << std::endl;
@@ -294,20 +294,31 @@ int main(int argc, const char *argv[]) {
 
 void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity){
 
-    std::mt19937 gen(42); // Fixed seed for reproducibility
-    std::bernoulli_distribution dist(0.1);
-
     std::vector<int32_t> srcVecSpikes;
     srcVecSpikes.reserve(IN_SIZE); // Pre-allocate for efficiency
-/*
-    for (int i = 0; i < IN_SIZE; ++i) {
-        srcVecSpikes.push_back(dist(gen) ? 1 : 0);
+
+    // Read input from a txt file produced by the torch wrapper
+    std::ifstream infile("input_spikes.txt");
+    if( !infile.is_open()) {
+        std::cerr << "Failed to open the input file\n";
+        return;
     }
-*/
-te
+
+    int value;
+    int count = 0;
+    while (infile >> value && count < IN_SIZE) {
+        srcVecSpikes.push_back(value);
+        ++count;
+    }
+    
+    /*
+    std::vector<int32_t> srcVecSpikes;
+    srcVecSpikes.reserve(IN_SIZE); // Pre-allocate for efficiency
+    
     for (int i = 0; i < IN_SIZE; ++i) {
         srcVecSpikes.push_back(1);
     }
+    */
     
     // Copy to the buffer
     memcpy(buf_in_spikes, srcVecSpikes.data(), IN_SIZE * sizeof(int32_t));

@@ -16,28 +16,28 @@ from aie.iron.controlflow import range_
 
 def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_reset, trace_size):
 
-    input_spike = np.float32
-    out_spike = np.float32
+    input_spike = np.int16
+    out_spike = np.int16
     tile_size = 256
     mem_size = 512
     # Depending on the size of the aie register
-    membrane_size = 16
+    membrane_size = 32
     problem_size = in1_size // input_spike(0).nbytes
     n_cores = 2
 
     # Assertion
     assert in1_size == out_size, "Input and output size must be the same"
-    assert membrane_size == 16, "Membrane buffer must have the same size as the AIE register till now"
+    assert membrane_size == 32, "Membrane buffer must have the same size as the AIE register till now"
     assert reset == -1 or reset > 0, "Reset must be -1 if hard reset is required"
     #assert decay_factor <= 1 and decay_factor > 0, "Decay factor must be between 0 and 1"
     assert n_cores % 2 == 0, "Num of cores must be a multiple of 2"
 
     
     # Define tensor types
-    aie_tile_ty = np.ndarray[(tile_size,), np.dtype[np.int32]]
-    all_data_ty = np.ndarray[(problem_size,), np.dtype[np.int32]]
-    mem_tile_ty = np.ndarray[(mem_size,), np.dtype[np.int32]]
-    membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float32]]
+    aie_tile_ty = np.ndarray[(tile_size,), np.dtype[np.int16]]
+    all_data_ty = np.ndarray[(problem_size,), np.dtype[np.int16]]
+    mem_tile_ty = np.ndarray[(mem_size,), np.dtype[np.int16]]
+    membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float16]]
     
     # Number of sub vector to iterate the worker on
     number_sub_vectors = problem_size // mem_size
