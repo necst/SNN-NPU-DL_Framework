@@ -252,6 +252,25 @@ int main(int argc, const char *argv[]) {
     auto vstop = std::chrono::system_clock::now();
 
     // ------------------------------------------------------
+    // WRITE OUTPUT SPIKES TO FILE
+    // ------------------------------------------------------
+    std::ofstream outfile("output_spikes.txt");
+    if (!outfile.is_open()) {
+        std::cerr << "Failed to open output file for writing.\n";
+        return 1;
+    }
+    
+    for (int i = 0; i < OUT_SIZE; ++i) {
+        outfile << buf_out_spikes[i] << "\n";
+    }
+    
+    outfile.close();
+    
+    if (verbosity >= 1)
+        std::cout << "Output spikes written to output_spikes.txt\n";
+
+    
+    // ------------------------------------------------------
     // PRINTING RESULT AND TIME SPENT
     // ------------------------------------------------------
 
@@ -304,20 +323,21 @@ void generateInput(int32_t *buf_in_spikes, int IN_SIZE, int verbosity){
         return;
     }
 
-
     int value;
     int count = 0;
     while (infile >> value && count < IN_SIZE) {
         srcVecSpikes.push_back(value);
         ++count;
     }
-
-/*
-
+    
+    /*
+    std::vector<int32_t> srcVecSpikes;
+    srcVecSpikes.reserve(IN_SIZE); // Pre-allocate for efficiency
+    
     for (int i = 0; i < IN_SIZE; ++i) {
         srcVecSpikes.push_back(1);
     }
-*/
+    */
     
     // Copy to the buffer
     memcpy(buf_in_spikes, srcVecSpikes.data(), IN_SIZE * sizeof(int32_t));

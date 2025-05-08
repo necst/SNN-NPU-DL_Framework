@@ -1,6 +1,7 @@
 import numpy as np
 import subprocess
 from mlir_wrapper import compile_snn_neuron
+import torch
 
 class snn_neuron_npu:
     def __init__(self, in1_size=4096, out_size=4096, threshold=10, decay_factor=0.9, reset=-1, hard_reset=1, trace_size=8192, use_placed=False):
@@ -32,6 +33,13 @@ class snn_neuron_npu:
         
         print("Running the testbench...")
         subprocess.run(["make", "run"])
+
+        with open("output_spikes.txt", "r") as f:
+            output_spikes = [int(line.strip()) for line in f if line.strip()]
+
+        output_spikes_torch = torch.tensor(output_spikes, dtype=torch.int32)
+
+        return output_spikes_torch
         
 
         
