@@ -34,5 +34,3 @@ def compile_snn_neuron(
     subprocess.run(make_cmd, check=True)
     
     print("Compilation completed. Artifacts generated: build/final.xclbin, build/insts.bin")
-
-compile_snn_neuron()
