@@ -106,13 +106,6 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
 extern "C" {
 
-#if BIT_WIDTH == 16
-
-void snnNeuronLineSimd(int16_t *in, int16_t *out, float *inMem, float *outMem, float threshold, float decay_factor, float reset, int32_t hard_reset, int32_t lineWidth){
-  snn_neuron_aie_simd_<int16_t, 32>(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
-}
-
-#if BIT_WIDTH == 32
 
 void snnNeuronLineSimd(int32_t *in, int32_t *out, float *inMem, float *outMem, float threshold, float decay_factor, float reset, int32_t hard_reset, int32_t lineWidth){
   snn_neuron_aie_simd_<int32_t, 16>(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
