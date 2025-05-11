@@ -6,7 +6,7 @@ import os
 def compile_snn_neuron(
     in1_size=4096,
     out_size=4096,
-    threshold=10,
+    threshold=5,
     decay_factor=0.9,
     reset=-1,
     hard_reset=1,

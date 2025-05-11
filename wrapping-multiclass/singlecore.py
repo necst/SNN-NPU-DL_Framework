@@ -41,8 +41,6 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
 
     lif_neuron_sisd = Kernel("snnNeuronLineInteger", "scale.o", [aie_tile_ty, aie_tile_ty, np.float32, np.float32, np.float32, np.int32, np.int32],)
 
-    decay_factor = int(decay_factor);
-    
     def core_body(of_in_spikes_0, of_out_spikes_0, lif_neuron):
         for _ in range_(number_sub_vectors):
             elem_in_spikes = of_in_spikes_0.acquire(1)

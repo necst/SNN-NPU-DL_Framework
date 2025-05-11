@@ -63,10 +63,10 @@ args parse_args(int argc, const char *argv[]) {
     desc.add_options()
     ("in1_size", po::value<int>(), "Input size")
     ("out_size", po::value<int>(), "Output size")
-    ("threshold", po::value<int>(), "Neuron firing threshold")
+    ("threshold", po::value<float>(), "Neuron firing threshold")
     ("decay_factor", po::value<float>(), "Decay factor for neuron potential")
     ("hard_reset", po::value<int>()->default_value(0), "Use hard reset (1) or soft reset (0)")
-    ("reset", po::value<int>()->default_value(0), "Reset behavior")
+    ("reset", po::value<float>()->default_value(0), "Reset behavior")
     ("aie_design", po::value<int>()->default_value(0), "AIE design type");
 
     args myargs;
@@ -74,10 +74,10 @@ args parse_args(int argc, const char *argv[]) {
     myargs.input_size = vm["in1_size"].as<int>();
     myargs.output_size = vm["out_size"].as<int>();
     myargs.verbosity = vm["verbosity"].as<int>();
-    myargs.threshold = vm["threshold"].as<int>();
+    myargs.threshold = vm["threshold"].as<float>();
     myargs.decay_factor = vm["decay_factor"].as<float>();
     myargs.hard_reset = vm["hard_reset"].as<int>();
-    myargs.reset = vm["reset"].as<int>();
+    myargs.reset = vm["reset"].as<float>();
     myargs.aie_design_type = vm["aie_design"].as<int>();
     myargs.trace_size = vm["trace_sz"].as<int>();
     myargs.instr = vm["instr"].as<std::string>();
@@ -136,12 +136,12 @@ int singlecore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args 
     int32_t out = 0;
     float decay_factor = myargs.decay_factor;
     
-    std::cout << "Verifying results ..." << std::endl;
+    std::cout << "Verifying results ... Single neuron testbench" << std::endl;
         
     auto vstart = std::chrono::system_clock::now();
 
     for (uint32_t i = 0; i < IN_SIZE; i++) {
-        membrane_potential += buf_in_spikes[i] * decay_factor;
+        membrane_potential = buf_in_spikes[i] + membrane_potential * decay_factor;
         test = buf_out_spikes[i];
         
         if (membrane_potential >= THRESHOLD) {

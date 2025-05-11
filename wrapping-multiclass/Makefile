@@ -20,7 +20,7 @@ include ${srcdir}/../../makefile-common
 in1_size = 4096
 out_size = 4096 # must be equal to the in1_size
 threshold = 5
-decay_factor = 1
+decay_factor = 0.9
 reset = -1
 hard_reset = 1
 trace_size = 8192
@@ -28,7 +28,7 @@ verbosity = 2
 
 ## Name of the .py array and col of the npu to choose
 
-targetname = singlecore
+targetname ?= singlecore
 col = 0
 
 devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
@@ -51,7 +51,7 @@ ifeq (${use_placed}, 1)
 aie_py_src=${targetname}_placed.py
 endif
 
-all: build/final.xclbin build/insts.bin
+all: $(info [MAKE] targetname=$(targetname), aie_design_test_to_use=$(aie_design_test_to_use)) build/final.xclbin build/insts.bin
 
 VPATH := ${srcdir}/../../../aie_kernels/aie2
 
