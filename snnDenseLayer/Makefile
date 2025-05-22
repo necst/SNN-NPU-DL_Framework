@@ -28,7 +28,7 @@ verbosity = 2
 
 ## Name of the .py array and col of the npu to choose
 
-targetname ?= singlecore
+targetname ?= denselayer
 col = 0
 
 devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
@@ -102,4 +102,4 @@ clean_trace:
 	rm -rf tmpTrace trace.txt parse*json trace*json
 
 clean: clean_trace
-	rm -rf build _build inst aie.mlir.prj core_* test.elf ${targetname}.exe
+	rm -rf build _build inst aie.mlir.prj core_* test.elf ${targetname}.exe *.exe

@@ -25,30 +25,34 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     hidden_layer_1 = 16
     output_layer = 4
     membrane_size = 16
-    problem_size = in1_size // input_spike(0).nbytes
-    weights_all = [input_layer * hidden_layer_1, hidden_layer_1 * output_layer]
-    n_cores = 2
+    input_all = in1_size // input_spike(0).nbytes
+    output_all = (input_all // input_layer)*(output_layer + hidden_layer_1)
+    weights_all = (input_layer * hidden_layer_1 + hidden_layer_1 * output_layer)
+    n_layer = 3 # including input layer
 
     # Assertion
-    assert in1_size == out_size, "Input and output size must be the same"
     assert membrane_size == 16, "Membrane buffer must have the same size as the AIE register till now"
     assert reset == -1 or reset > 0, "Reset must be -1 if hard reset is required"
     assert decay_factor <= 1 and decay_factor > 0, "Decay factor must be between 0 and 1"
-    assert n_cores % 2 == 0, "Num of cores must be a multiple of 2"
+    assert input_all % input_layer == 0, "Input size must be a multiple of the input layer"
 
     
     # Define tensor types
-    aie_tile_ty = np.ndarray[(tile_size,), np.dtype[np.int32]]
-    all_data_ty = np.ndarray[(problem_size,), np.dtype[np.int32]]
+    input_tile_ty = np.ndarray[(input_layer,), np.dtype[np.int32]]
+    input_all_data_ty = np.ndarray[(input_all,), np.dtype[np.int32]]
+    output_all_data_ty = np.ndarray[(output_all,), np.dtype[np.int32]]
     mem_tile_ty = np.ndarray[(mem_size,), np.dtype[np.int32]]
     
     # For quantization reduce the precision of the weight
-    weight_tile_all_ty = np.ndarray[(weights_all,), np.dtype[np.int32]]
+    weight_tile_all_ty = np.ndarray[(weights_all,), np.dtype[np.float32]]
     membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float32]]
-    hidden_1_output_ty = np.ndarray[(hidden_layer_1,), np.dtype[np.float32]]
+    hidden_1_output_ty = np.ndarray[(hidden_layer_1,), np.dtype[np.int32]]
+    output_layer_ty = np.ndarray[(output_layer,), np.dtype[np.int32]]
+    weight_input_hidden = np.ndarray[(input_layer * hidden_layer_1,), np.dtype[np.float32]]
+    weight_hidden_output = np.ndarray[(hidden_layer_1 * output_layer,), np.dtype[np.float32]]  # hidden->output weights
     
     # Number of sub vector to iterate the worker on
-    number_sub_vectors = problem_size // mem_size
+    number_sub_vectors = input_all // input_layer
 
     # Object fifo declarations
     
@@ -62,38 +66,41 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     of_in_weights_all_L3_L2 = ObjectFifo(weight_tile_all_ty, name="input_weights_all")
 
     # L1 -> L1 membrane accumulation
-    of_in_membrane = [ObjectFifo(membrane_ty, name=f"in_out_membrane_{i}", default_depth=2) for i in range(n_cores)]
+    of_in_membrane = [ObjectFifo(membrane_ty, name=f"in_out_membrane_{i}", default_depth=2) for i in range(n_layer - 1)]
     
-    # L1 hidden_layer -> L1 output_layer
+    # L1 hidden_layer_1 -> L1 output_layer
     of_spikes_hidden_1_output = ObjectFifo(hidden_1_output_ty, name="hidden_1_output")
     
     # L2 -> L1
-    of_in_weight_L2_L1 = of_weights_L3_L2.cons().split(
+    of_in_weight_L2_L1 = of_in_weights_all_L3_L2.cons().split(
         offsets=[0, input_layer * hidden_layer_1],
         depths=[1, 1],
         obj_types=[
-            np.ndarray[(input_layer * hidden_layer,), np.dtype[np.int32]],  # input->hidden weights
-            np.ndarray[(hidden_layer * output_layer,), np.dtype[np.int32]]  # hidden->output weights
+            weight_input_hidden,  # input->hidden weights
+            weight_hidden_output  # hidden->output weights
         ],
         names=["input_hidden_1_weights", "hidden_1_output_weights"]
     )
     
     # L2 -> L1
-    of_in_layer_L2_L1 = of_in_spikes_L3_L2.cons().link(
-        obj_types=[aie_tile_ty] * n_cores,
-        names=[f"obj_L2_L1_neuron_{i}" for i in range(n_cores)],
+    of_in_spikes_L2_L1 = of_in_spikes_L3_L2.cons().forward(
+        obj_type=input_tile_ty,
+        name=f"obj_L2_L1_layer",
     )
 
     # L1 -> L2
-    of_out_spikes_L1_L2 = of_out_spikes_L2_L3.prod().link(
-        obj_types=[aie_tile_ty] * n_cores,
-        names=[f"obj_L1_L2_neuron_{i}" for i in range(n_cores)],
+    of_out_spikes_L1_L2 = of_out_spikes_L2_L3.prod().join(
+        offsets=[0, hidden_layer_1],
+        obj_types=[
+            hidden_1_output_ty,
+            output_layer_ty
+        ],
+        names=[f"obj_L1_L2_layer_{i}" for i in range(n_layer - 1)],
     )
     
-    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.float32, np.float32, np.float32, np.int32, np.int32, np.int32],)
-    
-    def core_body(of_in_spikes, of_out_spikes, of_in_membrane, of_out_membrane, of_in_weight_L2_L1, lif_neuron):
+    def core_body(of_in_spikes, of_out_spikes, of_in_membrane, of_out_membrane, of_in_weights_L2_L1, lif_neuron):
         init_mem = of_out_membrane.acquire(1)
+        weights = of_in_weights_L2_L1.acquire(1)
         for i in range_(membrane_size):
             init_mem[i] = 0
         of_out_membrane.release(1)
@@ -103,27 +110,35 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
             elem_out = of_out_spikes.acquire(1)
             elem_in_membrane = of_in_membrane.acquire(1)
             elem_out_membrane = of_out_membrane.acquire(1)
-            lif_neuron(elem_in_spikes, elem_out, elem_in_membrane, elem_out_membrane, threshold, decay_factor, reset, hard_reset, weights, tile_size)
+            lif_neuron(elem_in_spikes, elem_out, elem_in_membrane, elem_out_membrane, weights, threshold, decay_factor, reset, hard_reset, tile_size)
             of_in_spikes.release(1)
             of_out_spikes.release(1)
             of_in_membrane.release(1)
             of_out_membrane.release(1)
+            
+        of_in_weights_L2_L1.release(1)
 
     # Create a list of workers
     workers = []
 
+    # Define the kernels outside the worker append, or pass them as variables
+    snn_kernel_input_hidden = Kernel("snnNeuronLineSimdInputHidden", "scale.o", [input_tile_ty, hidden_1_output_ty, membrane_ty, membrane_ty, weight_input_hidden, np.float32, np.float32, np.float32, np.int32, np.int32],)
+    snn_kernel_hidden_output = Kernel("snnNeuronLineSimdHiddenOutput", "scale.o", [hidden_1_output_ty, output_layer_ty, membrane_ty, membrane_ty, weight_hidden_output, np.float32, np.float32, np.float32, np.int32, np.int32],)
+
+
     # Input -> Hidden_1
-    workers.append(Worker(core_body, fn_args=[of_in_spikes_L2_L1.cons(), of_spikes_hidden_1_output.prod(), of_in_membrane[0].cons(), of_in_membrane[0].prod(), of_in_weight_L2_L1[0].cons(), lif_neuron_simd]))
+    workers.append(Worker(core_body, fn_args=[of_in_spikes_L2_L1.cons(), of_out_spikes_L1_L2[0].prod(), of_in_membrane[0].cons(), of_in_membrane[0].prod(), of_in_weight_L2_L1[0].cons(), snn_kernel_input_hidden]))
 
     # Hidden_1 -> Output
-    workers.append(Worker(core_body, fn_args=[of_spikes_hidden_1_output.cons(), of_out_spikes_L1_L2.prod(), of_in_membrane[1].cons(), of_in_membrane[1].prod(), of_in_weight_L2_L1[1].cons(), lif_neuron_simd]))
+    workers.append(Worker(core_body, fn_args=[of_out_spikes_L1_L2[0].cons(), of_out_spikes_L1_L2[1].prod(), of_in_membrane[1].cons(), of_in_membrane[1].prod(), of_in_weight_L2_L1[1].cons(), snn_kernel_hidden_output]))
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
-    with rt.sequence(all_data_ty, all_data_ty) as (inTensor, outTensor):
+    with rt.sequence(input_all_data_ty, weight_tile_all_ty, output_all_data_ty) as (inTensor, weightTensor, outTensor):
         #rt.enable_trace(trace_size, workers=[worker])
         rt.start(*workers)
         rt.fill(of_in_spikes_L3_L2.prod(), inTensor)
+        rt.fill(of_in_weights_all_L3_L2.prod(), weightTensor)
         rt.drain(of_out_spikes_L2_L3.cons(), outTensor, wait=True)
 
     # Place program components (assign them resources on the device) and generate an MLIR module
