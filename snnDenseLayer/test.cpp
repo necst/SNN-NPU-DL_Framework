@@ -114,6 +114,26 @@ void generateInput(int32_t *buf_in_spikes, int32_t IN_SIZE, args myargs){
     memcpy(buf_in_spikes, srcVecSpikes.data(), IN_SIZE * sizeof(int32_t));
 }
 
+void generateWeights(int32_t *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
+    
+    int verbosity = myargs.verbosity;
+    
+    std::vector<int32_t> srcVecSpikes;
+    srcVecSpikes.reserve(WEIGHT_SIZE); // Pre-allocate for efficiency
+
+    // Read input from a txt file produced by the torch wrapper
+    
+    int value = 1;
+    int count = 0;
+    while (count < WEIGHT_SIZE) {
+        srcVecSpikes.push_back(value);
+        ++count;
+    }
+    
+    // Copy to the buffer
+    memcpy(buf_in_weights, srcVecSpikes.data(), WEIGHT_SIZE * sizeof(int32_t));
+}
+
 int singlecore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args myargs, auto start, auto stop)
 {
     // Generate trace
@@ -354,6 +374,101 @@ int multicore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args m
     } 
 }
 
+int denselayer_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args myargs, auto start, auto stop)
+{
+    int verbosity = myargs.verbosity;
+    int IN_SIZE = myargs.input_size / sizeof(std::int32_t);
+    int OUT_SIZE = IN_SIZE;
+    //Perfomance evaluator variables
+    float npu_time_total = 0;
+    float npu_time_min = 9999999;
+    float npu_time_max = 0;
+    int ret_val = 0;
+
+    // Build a vector with the output spike (ref) to compare with the buf_out_spikes[i]
+    int errors = 0;
+    int32_t ref = 0;
+    int32_t test = 0;
+    int32_t out = 0;
+    
+    std::cout << "Verifying results ..." << std::endl;
+        
+    auto vstart = std::chrono::system_clock::now();
+
+    const uint32_t NUM_CORES = 2; // Number of compute tiles used in the architecture
+    const uint32_t NUM_NEURONS = 32; // Number of neurons in the architecture
+    const uint32_t NUM_NEURONS_PER_CORE = 16;
+    const uint32_t MEM_SIZE = 512; // Adjsut as needed
+    const uint32_t AIE_SIZE = MEM_SIZE / NUM_CORES; // Number of neurons in the architecture
+    const uint32_t TIME_STEPS = AIE_SIZE / NUM_NEURONS_PER_CORE; // Number of time steps
+    const uint32_t NUM_CALLED_CORE = IN_SIZE / MEM_SIZE;
+    uint32_t shift_neuron = 0;
+    
+    for (int32_t counter = 0; counter < IN_SIZE; counter ++)
+        {
+        std::cout << buf_out_spikes[counter] << std::endl;
+        }
+    
+        auto vstop = std::chrono::system_clock::now();
+    
+        // ------------------------------------------------------
+        // WRITE OUTPUT SPIKES TO FILE
+        // ------------------------------------------------------
+        std::ofstream outfile("output_spikes.txt");
+        if (!outfile.is_open()) {
+            std::cerr << "Failed to open output file for writing.\n";
+            return 1;
+        }
+        
+        for (int i = 0; i < OUT_SIZE; ++i) {
+            outfile << buf_out_spikes[i] << "\n";
+        }
+        
+        outfile.close();
+        
+        if (verbosity >= 1)
+            std::cout << "Output spikes written to output_spikes.txt\n";
+    
+        
+        // ------------------------------------------------------
+        // PRINTING RESULT AND TIME SPENT
+        // ------------------------------------------------------
+    
+        int n_iterations = TIME_STEPS * (NUM_NEURONS * NUM_NEURONS_PER_CORE) * (NUM_NEURONS / 2) * NUM_CALLED_CORE;
+            
+        float vtime = std::chrono::duration_cast<std::chrono::seconds>(vstop - vstart).count();
+        std::cout << "Verify time: " << vtime << " secs." << std::endl;
+    
+        float npu_time = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+        npu_time_total += npu_time;
+        npu_time_min = (npu_time < npu_time_min) ? npu_time : npu_time_min;
+        npu_time_max = (npu_time > npu_time_max) ? npu_time : npu_time_max;
+    
+        float macs = 0;
+        std::cout << std::endl << "Avg NPU time: " << npu_time_total / n_iterations << " us." << std::endl;
+        if (macs > 0)
+            std::cout << "Avg NPU gflops: " << macs / (1000 * npu_time_total / n_iterations) << std::endl;
+        std::cout << std::endl << "Min NPU time: " << npu_time_min << " us." << std::endl;
+        if (macs > 0)
+            std::cout << "Max NPU gflops: " << macs / (1000 * npu_time_min) << std::endl;
+        std::cout << std::endl << "Max NPU time: " << npu_time_max << " us." << std::endl;
+        if (macs > 0)
+            std::cout << "Min NPU gflops: " << macs / (1000 * npu_time_max) << std::endl;
+    
+        std::cout << std::endl << "FINISHED - Cleaning up." << std::endl; 
+        // Print Pass/Fail result of our test
+        if (!errors) {
+            std::cout << std::endl << "PASS!" << std::endl << std::endl;
+        return 0;
+        } else {
+            std::cout << std::endl
+                  << errors << " mismatches." << std::endl
+                  << std::endl;
+            std::cout << std::endl << "fail." << std::endl << std::endl;
+        return 1;
+    } 
+}
+
 int main(int argc, const char *argv[]) {
 
     // ------------------------------------------------------
@@ -368,7 +483,8 @@ int main(int argc, const char *argv[]) {
     bool VERIFY = true;
     int IN_SIZE = myargs.input_size / sizeof(std::int32_t);
     int OUT_SIZE = IN_SIZE;
-    int verbosity = myargs.verbosity;
+    int WEIGHT_SIZE = (16*16) + (16*16);
+    int verbosity = myargs.verbosity; 
 
     // Load instruction sequence
     std::vector<uint32_t> instr_v =
@@ -393,8 +509,9 @@ int main(int argc, const char *argv[]) {
                           XCL_BO_FLAGS_CACHEABLE, kernel.group_id(1));
     auto bo_in_spikes = xrt::bo(device, IN_SIZE * sizeof(int32_t),
                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
+    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE * sizeof(int32_t), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
     auto bo_out_spikes = xrt::bo(device, OUT_SIZE * sizeof(int32_t),
-                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4));
+                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(5));
 
     //auto bo_trace = xrt::bo(device, trace_size, XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(7));
 
@@ -402,8 +519,10 @@ int main(int argc, const char *argv[]) {
         std::cout << "Writing data into buffer objects.\n";
 
     int32_t* buf_in_spikes = bo_in_spikes.map<int32_t *>();
+    int32_t* buf_in_weights = bo_in_weights.map<int32_t *>();
     
     generateInput(buf_in_spikes, IN_SIZE, myargs);
+    generateWeights(buf_in_weights, WEIGHT_SIZE, myargs);
     
     // Copy instruction stream to xrt buffer object
     void *bufInstr = bo_instr.map<void *>();
@@ -423,6 +542,7 @@ int main(int argc, const char *argv[]) {
     // sync host to device memories
     bo_instr.sync(XCL_BO_SYNC_BO_TO_DEVICE);
     bo_in_spikes.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+    bo_in_weights.sync(XCL_BO_SYNC_BO_TO_DEVICE);
     bo_out_spikes.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
     // Execute the kernel and wait to finish
@@ -432,7 +552,7 @@ int main(int argc, const char *argv[]) {
     auto start = std::chrono::high_resolution_clock::now();
     unsigned int opcode = 3;
     auto run =
-        kernel(opcode, bo_instr, instr_v.size(), bo_in_spikes, bo_out_spikes);
+        kernel(opcode, bo_instr, instr_v.size(), bo_in_spikes, bo_in_weights, bo_out_spikes);
     run.wait();
 
     std::cout<< "Execution finished" << std::endl;
@@ -457,6 +577,9 @@ int main(int argc, const char *argv[]) {
         break;
         case 1:
             multicore_testbench(buf_in_spikes, buf_out_spikes, myargs, start, stop);
+        break;
+        case 2:
+            denselayer_testbench(buf_in_spikes, buf_out_spikes, myargs, start, stop);
         break;
         default:
             std::cout << "Not correct value for testbench..." << std::endl;

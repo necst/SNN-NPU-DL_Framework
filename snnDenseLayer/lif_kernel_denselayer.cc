@@ -59,7 +59,7 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
     for (int j = 0; j < width; j += INPUT_SIZE) {
         chess_prepare_for_pipelining
-        chess_loop_range(1, ) {
+        chess_loop_range(8, ) {
             // Load and convert input spikes
             aie::vector<int32_t, INPUT_SIZE> v_spikes_int = 
                 aie::load_v<INPUT_SIZE>(inPtr);
