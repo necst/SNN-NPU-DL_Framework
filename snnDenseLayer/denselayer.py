@@ -28,7 +28,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     membrane_size = 16
     input_all = in1_size // input_spike(0).nbytes
     output_all = input_all
-    weights_all = (16 * 16 + 16 * 16)
+    weights_all = (standard_size_layer * standard_size_layer + standard_size_layer * standard_size_layer)
     n_layer = 3 # including input layer
 
     # Assertion
@@ -47,8 +47,8 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float32]]
     weight_tile_all_ty = np.ndarray[(weights_all,), np.dtype[np.float32]]
     
-    weight_input_hidden_ty = np.ndarray[(16 * 16,), np.dtype[np.float32]]
-    weight_hidden_output_ty = np.ndarray[(16 * 16,), np.dtype[np.float32]]  # hidden->output weights
+    weight_input_hidden_ty = np.ndarray[(standard_size_layer * standard_size_layer, ), np.dtype[np.float32]]
+    weight_hidden_output_ty = np.ndarray[(standard_size_layer * standard_size_layer, ), np.dtype[np.float32]]  # hidden->output weights
     
     # Number of sub vector to iterate the worker on
     number_sub_vectors = input_all // tile_size
@@ -110,6 +110,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
         for i in range_(membrane_size):
             init_mem[i] = 0
         of_out_membrane.release(1)
+        of_in_weights_L2_L1.release(1)
         
         for _ in range_(number_sub_vectors):
             elem_in_spikes = of_in_spikes.acquire(1)
@@ -121,7 +122,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
             of_out_spikes.release(1)
             of_in_membrane.release(1)
             of_out_membrane.release(1)
-        of_in_weights_L2_L1.release(1)   
+            
         
 
     # Create a list of workers

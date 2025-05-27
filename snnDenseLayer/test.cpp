@@ -114,24 +114,21 @@ void generateInput(int32_t *buf_in_spikes, int32_t IN_SIZE, args myargs){
     memcpy(buf_in_spikes, srcVecSpikes.data(), IN_SIZE * sizeof(int32_t));
 }
 
-void generateWeights(int32_t *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
+void generateWeights(float *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
     
     int verbosity = myargs.verbosity;
     
-    std::vector<int32_t> srcVecSpikes;
-    srcVecSpikes.reserve(WEIGHT_SIZE); // Pre-allocate for efficiency
+    std::vector<float> srcWeights;
+    srcWeights.reserve(WEIGHT_SIZE); // Pre-allocate for efficiency
 
-    // Read input from a txt file produced by the torch wrapper
-    
-    int value = 1;
     int count = 0;
     while (count < WEIGHT_SIZE) {
-        srcVecSpikes.push_back(value);
+        srcWeights.push_back(1.0f);
         ++count;
     }
     
     // Copy to the buffer
-    memcpy(buf_in_weights, srcVecSpikes.data(), WEIGHT_SIZE * sizeof(int32_t));
+    memcpy(buf_in_weights, srcWeights.data(), WEIGHT_SIZE  * sizeof(float));
 }
 
 int singlecore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args myargs, auto start, auto stop)
@@ -509,7 +506,7 @@ int main(int argc, const char *argv[]) {
                           XCL_BO_FLAGS_CACHEABLE, kernel.group_id(1));
     auto bo_in_spikes = xrt::bo(device, IN_SIZE * sizeof(int32_t),
                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
-    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE * sizeof(int32_t), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
+    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE * sizeof(float), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
     auto bo_out_spikes = xrt::bo(device, OUT_SIZE * sizeof(int32_t),
                                XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(5));
 
@@ -519,11 +516,11 @@ int main(int argc, const char *argv[]) {
         std::cout << "Writing data into buffer objects.\n";
 
     int32_t* buf_in_spikes = bo_in_spikes.map<int32_t *>();
-    int32_t* buf_in_weights = bo_in_weights.map<int32_t *>();
+    float* buf_in_weights = bo_in_weights.map<float *>();
     
     generateInput(buf_in_spikes, IN_SIZE, myargs);
     generateWeights(buf_in_weights, WEIGHT_SIZE, myargs);
-    
+
     // Copy instruction stream to xrt buffer object
     void *bufInstr = bo_instr.map<void *>();
     memcpy(bufInstr, instr_v.data(), instr_v.size() * sizeof(int));
