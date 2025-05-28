@@ -74,12 +74,13 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             g_membrane_potential = aie::to_vector<float>(acc);
 
             // 2. Process weights and spikes
-            for (int i = 0; i < 5; ++i) {
+            for (int i = 0; i < OUTPUT_LAYER; ++i) {
                 aie::vector<float, OUTPUT_LAYER> weight_column = 
-                    aie::load_v<OUTPUT_LAYER>(inWeightsPtr + i * OUTPUT_LAYER);
+    aie::load_v<OUTPUT_LAYER, aie_dm_resource::a>(inWeightsPtr + i * OUTPUT_LAYER);
+
                 
                 // Multiply and add
-                auto weighted_input_accum = aie::mul(weight_column, v_spikes[i]);
+                auto weighted_input_accum = aie::mul(weight_column, v_spikes[15]);
                 weight_column = aie::to_vector<float>(weighted_input_accum);
                 g_membrane_potential = aie::add(g_membrane_potential, weight_column);
             }
@@ -102,6 +103,8 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             // Generate output spikes (corrected version)
             aie::vector<float, OUTPUT_SIZE> v_output_float = aie::select(aie::zeros<float, OUTPUT_SIZE>(), v_one_float, v_fire_mask);
 */
+
+        
             // 6. Convert to fixed-point
             aie::vector<int32_t, OUTPUT_SIZE> v_output = 
             aie::to_fixed<int32_t>(g_membrane_potential);
@@ -110,11 +113,11 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             aie::store_v(outPtr, v_output);
             outPtr += OUTPUT_SIZE;
         //}
-    aie::store_v(out_membrane, g_membrane_potential);
+    
    }
 
-    // Store final membrane potential
-    
+    // Store final membrane potential when the function has finished
+    aie::store_v(out_membrane, g_membrane_potential);
 }
 
 extern "C" {
