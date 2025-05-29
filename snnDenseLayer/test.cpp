@@ -7,7 +7,8 @@
 // Copyright (C) 2023, Advanced Micro Devices, Inc.
 //
 //===----------------------------------------------------------------------===//
-
+#include "cxxopts.hpp"
+#include <bits/stdc++.h>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -22,7 +23,7 @@
 
 #include "test_utils.h"
 
-namespace po = boost::program_options;
+//namespace po = boost::program_options;
 
 //Hardcoded variables to remove
 const int THRESHOLD = 5;
@@ -56,10 +57,11 @@ struct args {
 };
 
 args parse_args(int argc, const char *argv[]) {
-    po::options_description desc("Allowed options");
-    po::variables_map vm;
+    cxxopts::Options desc("Allowed options");
+    cxxopts::ParseResult vm;
     test_utils::add_default_options(desc);
-    
+
+    /*
     desc.add_options()
     ("in1_size", po::value<int>(), "Input size")
     ("out_size", po::value<int>(), "Output size")
@@ -68,6 +70,16 @@ args parse_args(int argc, const char *argv[]) {
     ("hard_reset", po::value<int>()->default_value(0), "Use hard reset (1) or soft reset (0)")
     ("reset", po::value<float>()->default_value(0), "Reset behavior")
     ("aie_design", po::value<int>()->default_value(0), "AIE design type");
+    */
+
+    desc.add_options()
+        ("in1_size", "Input size", cxxopts::value<int>())
+        ("out_size", "Output size", cxxopts::value<int>())
+        ("threshold", "Neuron firing threshold", cxxopts::value<float>())
+        ("decay_factor", "Decay factor for neuron potential", cxxopts::value<float>())
+        ("hard_reset", "Use hard reset (1) or soft reset (0)", cxxopts::value<int>()->default_value("0"))
+        ("reset", "Reset behavior", cxxopts::value<float>()->default_value("0"))
+        ("aie_design", "AIE design type", cxxopts::value<int>()->default_value("0"));
 
     args myargs;
     test_utils::parse_options(argc, argv, desc, vm);
@@ -119,7 +131,7 @@ void generateWeights(float *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
     int verbosity = myargs.verbosity;
     
     std::vector<float> srcWeights;
-    srcWeights.reserve(WEIGHT_SIZE); // Pre-allocate for efficiency
+    srcWeights.reserve(WEIGHT_SIZE/2); // Pre-allocate for efficiency
 
     int count = 0;
     while (count < WEIGHT_SIZE) {
@@ -128,7 +140,7 @@ void generateWeights(float *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
     }
     
     // Copy to the buffer
-    memcpy(buf_in_weights, srcWeights.data(), WEIGHT_SIZE  * sizeof(float));
+    memcpy(buf_in_weights, srcWeights.data(), WEIGHT_SIZE/2  * sizeof(float));
 }
 
 int singlecore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args myargs, auto start, auto stop)
@@ -506,7 +518,7 @@ int main(int argc, const char *argv[]) {
                           XCL_BO_FLAGS_CACHEABLE, kernel.group_id(1));
     auto bo_in_spikes = xrt::bo(device, IN_SIZE * sizeof(int32_t),
                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
-    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE * sizeof(float), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
+    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE /2 * sizeof(float), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
     auto bo_out_spikes = xrt::bo(device, OUT_SIZE * sizeof(int32_t),
                                XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(5));
 
