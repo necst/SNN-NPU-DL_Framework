@@ -1,3 +1,4 @@
+
 //===- test.cpp -------------------------------------------------*- C++ -*-===//
 // 
 // This file is licensed under the Apache License v2.0 with LLVM Exceptions.
@@ -28,8 +29,6 @@
 //Hardcoded variables to remove
 const int THRESHOLD = 5;
 const float DECAY_FACTOR = 0.9;
-const int IF_SIMD = 1;
-
 
 //--------------------------------------------------------------------------
 // XRT Wrapper struct and functions (only those used)
@@ -429,7 +428,7 @@ int denselayer_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args 
             return 1;
         }
         
-        for (int i = 0; i < OUT_SIZE; ++i) {
+        for (int i = 0; i < OUT_SIZE*2; ++i) {
             outfile << buf_out_spikes[i] << "\n";
         }
         
@@ -491,7 +490,7 @@ int main(int argc, const char *argv[]) {
     // Declaring design constants
     bool VERIFY = true;
     int IN_SIZE = myargs.input_size / sizeof(std::int32_t);
-    int OUT_SIZE = IN_SIZE;
+    int OUT_SIZE = IN_SIZE*2;
     int WEIGHT_SIZE = (16*16) + (16*16);
     int verbosity = myargs.verbosity; 
 
@@ -519,7 +518,7 @@ int main(int argc, const char *argv[]) {
     auto bo_in_spikes = xrt::bo(device, IN_SIZE * sizeof(int32_t),
                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
     auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE * sizeof(float), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
-    auto bo_out_spikes = xrt::bo(device, OUT_SIZE * sizeof(int32_t),
+    auto bo_out_spikes = xrt::bo(device, OUT_SIZE * 2 * sizeof(int32_t),
                                XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(5));
 
     //auto bo_trace = xrt::bo(device, trace_size, XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(7));
@@ -596,6 +595,7 @@ int main(int argc, const char *argv[]) {
     
     return 0;
 }
+
 
 
 
