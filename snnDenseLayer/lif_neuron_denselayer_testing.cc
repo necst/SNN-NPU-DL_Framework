@@ -18,6 +18,30 @@
 #define input_type int32_t // Input type of the stream
 #define required_type float // Type for the computation
 
+float hardcoded_retrieve(aie::vector<float, 16> vector, int32_t index) {
+    float spike_val = 0.0f;
+    switch(index) {
+        case 0:  spike_val = extract_elem(vector, 0);  break;
+        case 1:  spike_val = extract_elem(vector, 1);  break;
+        case 2:  spike_val = extract_elem(vector, 2);  break;
+        case 3:  spike_val = extract_elem(vector, 3);  break;
+        case 4:  spike_val = extract_elem(vector, 4);  break;
+        case 5:  spike_val = extract_elem(vector, 5);  break;
+        case 6:  spike_val = extract_elem(vector, 6);  break;
+        case 7:  spike_val = extract_elem(vector, 7);  break;
+        case 8:  spike_val = extract_elem(vector, 8);  break;
+        case 9:  spike_val = extract_elem(vector, 9);  break;
+        case 10: spike_val = extract_elem(vector, 10); break;
+        case 11: spike_val = extract_elem(vector, 11); break;
+        case 12: spike_val = extract_elem(vector, 12); break;
+        case 13: spike_val = extract_elem(vector, 13); break;
+        case 14: spike_val = extract_elem(vector, 14); break;
+        case 15: spike_val = extract_elem(vector, 15); break;
+        default: spike_val = 0.0f; break;
+    }
+    return spike_val;
+}
+
 template <typename T, int INPUT_LAYER, int OUTPUT_LAYER>
 __attribute__((noinline)) 
 void snn_neuron_aie_simd_(int32_t *restrict in, 
@@ -81,23 +105,24 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
 
                 
                 // Multiply and add
+                
                 auto weighted_input_accum = aie::mul(weight_column, v_spikes[i]);
                 weight_column = aie::to_vector<float>(weighted_input_accum);
                 g_membrane_potential = aie::add(g_membrane_potential, weight_column);
             }
 */
+            int32_t index = 0;
          // 2. Process weights row-wise (one output neuron at a time)
-            for (int i = 0; i < OUTPUT_SIZE; ++i) {
-                // Load weights for the i-th output neuron (INPUT_SIZE weights)
-                aie::vector<float, OUTPUT_SIZE> weights_row = 
-                    aie::load_v<OUTPUT_SIZE>(inWeightsPtr + i * OUTPUT_SIZE);
+            for (index = 0; index < 16; ++index) {
+                aie::vector<float, OUTPUT_SIZE> weights_column = 
+                    aie::load_v<OUTPUT_SIZE>(inWeightsPtr + index * OUTPUT_SIZE);
 
-            // Multiply weights with input spikes (SIMD)
-                auto weighted_input_acc = aie::mul(weights_row, v_spikes);
-                auto weighted_input_vec = aie::to_vector<float>(weighted_input_acc);  // Convert to vector
-                float sum = aie::reduce_add(weighted_input_vec);
-
-                g_membrane_potential[i] = g_membrane_potential[i] + sum;
+                float spike_val = hardcoded_retrieve(v_spikes, index);
+                aie::vector<float, OUTPUT_SIZE> v_input = aie::broadcast<float, OUTPUT_SIZE>(spike_val);
+            
+                auto weights_input_acc = aie::mul(weights_column, v_input);
+                auto weights_input_vec = aie::to_vector<float>(weights_input_acc);
+                g_membrane_potential = aie::add(g_membrane_potential, weights_input_vec);
             }
 /*        
             // 3. Fire mask
