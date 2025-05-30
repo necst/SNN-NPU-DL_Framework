@@ -18,31 +18,6 @@
 #define input_type int32_t // Input type of the stream
 #define required_type float // Type for the computation
 
-// Used since iteration in the for does not work correctly
-float hardcoded_retrieve(aie::vector<float, 16> vector, int32_t index) {
-    float spike_val = 0.0f;
-    switch(index) {
-        case 0:  spike_val = extract_elem(vector, 0);  break;
-        case 1:  spike_val = extract_elem(vector, 1);  break;
-        case 2:  spike_val = extract_elem(vector, 2);  break;
-        case 3:  spike_val = extract_elem(vector, 3);  break;
-        case 4:  spike_val = extract_elem(vector, 4);  break;
-        case 5:  spike_val = extract_elem(vector, 5);  break;
-        case 6:  spike_val = extract_elem(vector, 6);  break;
-        case 7:  spike_val = extract_elem(vector, 7);  break;
-        case 8:  spike_val = extract_elem(vector, 8);  break;
-        case 9:  spike_val = extract_elem(vector, 9);  break;
-        case 10: spike_val = extract_elem(vector, 10); break;
-        case 11: spike_val = extract_elem(vector, 11); break;
-        case 12: spike_val = extract_elem(vector, 12); break;
-        case 13: spike_val = extract_elem(vector, 13); break;
-        case 14: spike_val = extract_elem(vector, 14); break;
-        case 15: spike_val = extract_elem(vector, 15); break;
-        default: spike_val = 0.0f; break;
-    }
-    return spike_val;
-}
-
 __attribute__((noinline)) 
 void snn_neuron_aie_simd_(int32_t *restrict in, 
                           int32_t *restrict out,
@@ -112,7 +87,7 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
                 auto weights_input_vec = aie::to_vector<float>(weights_input_acc);
                 g_membrane_potential = aie::add(g_membrane_potential, weights_input_vec);
             }
-   /*     
+        
             // 3. Fire mask
             auto v_fire_mask = aie::ge(g_membrane_potential, v_threshold);
        
@@ -130,10 +105,10 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             // 5. Generate output spikes
             // Generate output spikes (corrected version)
             aie::vector<float, DEFAULT_SIZE> v_output_float = aie::select(aie::zeros<float, DEFAULT_SIZE>(), v_one_float, v_fire_mask);
-*/
+        
             // 6. Convert to fixed-point
             aie::vector<int32_t, DEFAULT_SIZE> v_output = 
-            aie::to_fixed<int32_t>(g_membrane_potential);
+            aie::to_fixed<int32_t>(v_output_float);
 
             // 7. Store output
             aie::store_v(outPtr, v_output);
