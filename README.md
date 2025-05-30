@@ -39,3 +39,12 @@ Follow these steps to set up the Iron API for MLIR AIE:
 
 2. **Follow the instruction on the official github page**:
    - [Getting Started for AMD Ryzen™ AI on Linux](https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux)
+  
+---
+
+## Adapting the program
+
+1. **DenseLayer**
+  - Ensure to have the output size n_layers - 1 (exclude the input) * input_size
+2. **TraceSize**
+ - Ensure to remove comment in the test.cpp
