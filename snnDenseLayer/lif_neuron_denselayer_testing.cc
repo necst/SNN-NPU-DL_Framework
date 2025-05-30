@@ -73,16 +73,31 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             auto acc = aie::mul(g_membrane_potential, v_decay_factor);
             g_membrane_potential = aie::to_vector<float>(acc);
 
+        /*
             // 2. Process weights and spikes
-            for (int i = 0; i < OUTPUT_LAYER; ++i) {
+            for (int i = 0; i < OUTPUT_SIZE; ++i) {
                 aie::vector<float, OUTPUT_LAYER> weight_column = 
     aie::load_v<OUTPUT_LAYER, aie_dm_resource::a>(inWeightsPtr + i * OUTPUT_LAYER);
 
                 
                 // Multiply and add
-                auto weighted_input_accum = aie::mul(weight_column, v_spikes[15]);
+                auto weighted_input_accum = aie::mul(weight_column, v_spikes[i]);
                 weight_column = aie::to_vector<float>(weighted_input_accum);
                 g_membrane_potential = aie::add(g_membrane_potential, weight_column);
+            }
+*/
+         // 2. Process weights row-wise (one output neuron at a time)
+            for (int i = 0; i < OUTPUT_SIZE; ++i) {
+                // Load weights for the i-th output neuron (INPUT_SIZE weights)
+                aie::vector<float, OUTPUT_SIZE> weights_row = 
+                    aie::load_v<OUTPUT_SIZE>(inWeightsPtr + i * OUTPUT_SIZE);
+
+            // Multiply weights with input spikes (SIMD)
+                auto weighted_input_acc = aie::mul(weights_row, v_spikes);
+                auto weighted_input_vec = aie::to_vector<float>(weighted_input_acc);  // Convert to vector
+                float sum = aie::reduce_add(weighted_input_vec);
+
+                g_membrane_potential[i] = g_membrane_potential[i] + sum;
             }
 /*        
             // 3. Fire mask
@@ -104,7 +119,6 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             aie::vector<float, OUTPUT_SIZE> v_output_float = aie::select(aie::zeros<float, OUTPUT_SIZE>(), v_one_float, v_fire_mask);
 */
 
-        
             // 6. Convert to fixed-point
             aie::vector<int32_t, OUTPUT_SIZE> v_output = 
             aie::to_fixed<int32_t>(g_membrane_potential);

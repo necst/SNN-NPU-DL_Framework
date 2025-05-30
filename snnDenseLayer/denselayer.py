@@ -45,7 +45,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     output_tile_ty = np.ndarray[(tile_size,), np.dtype[np.int32]]
     mem_tile_ty = np.ndarray[(mem_size,), np.dtype[np.int32]]
     membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float32]]
-    weight_tile_all_ty = np.ndarray[(weights_all,), np.dtype[np.float32]]
+    weight_tile_all_ty = np.ndarray[(standard_size_layer * standard_size_layer + standard_size_layer * standard_size_layer,), np.dtype[np.float32]]
     
     weight_input_hidden_ty = np.ndarray[(standard_size_layer * standard_size_layer, ), np.dtype[np.float32]]
     weight_hidden_output_ty = np.ndarray[(standard_size_layer * standard_size_layer, ), np.dtype[np.float32]]  # hidden->output weights
@@ -82,6 +82,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
         ],
         names=["input_hidden_1_weights", "hidden_1_output_weights"]
     )
+
     
     # L2 -> L1
     of_in_spikes_L2_L1 = of_in_spikes_L3_L2.cons().forward(

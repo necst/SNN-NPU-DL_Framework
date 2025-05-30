@@ -131,7 +131,7 @@ void generateWeights(float *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
     int verbosity = myargs.verbosity;
     
     std::vector<float> srcWeights;
-    srcWeights.reserve(WEIGHT_SIZE/2); // Pre-allocate for efficiency
+    srcWeights.reserve(WEIGHT_SIZE); // Pre-allocate for efficiency
 
     int count = 0;
     while (count < WEIGHT_SIZE) {
@@ -140,7 +140,7 @@ void generateWeights(float *buf_in_weights, int32_t WEIGHT_SIZE, args myargs){
     }
     
     // Copy to the buffer
-    memcpy(buf_in_weights, srcWeights.data(), WEIGHT_SIZE/2  * sizeof(float));
+    memcpy(buf_in_weights, srcWeights.data(), WEIGHT_SIZE * sizeof(float));
 }
 
 int singlecore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args myargs, auto start, auto stop)
@@ -518,7 +518,7 @@ int main(int argc, const char *argv[]) {
                           XCL_BO_FLAGS_CACHEABLE, kernel.group_id(1));
     auto bo_in_spikes = xrt::bo(device, IN_SIZE * sizeof(int32_t),
                               XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
-    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE /2 * sizeof(float), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
+    auto bo_in_weights = xrt::bo(device, WEIGHT_SIZE * sizeof(float), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4)); 
     auto bo_out_spikes = xrt::bo(device, OUT_SIZE * sizeof(int32_t),
                                XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(5));
 
