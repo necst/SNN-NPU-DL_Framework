@@ -83,8 +83,8 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
     g_membrane_potential = aie::load_v<OUTPUT_SIZE>(inMembrane);
 
     for (int j = 0; j < width; j += INPUT_SIZE) {
-        //chess_prepare_for_pipelining
-        //chess_loop_range(8,) {
+        chess_prepare_for_pipelining
+        chess_loop_range(8,) {
             // Load and convert input spikes
             aie::vector<int32_t, INPUT_SIZE> v_spikes_int = 
                 aie::load_v<INPUT_SIZE>(inPtr);
@@ -97,27 +97,14 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             auto acc = aie::mul(g_membrane_potential, v_decay_factor);
             g_membrane_potential = aie::to_vector<float>(acc);
 
-        /*
-            // 2. Process weights and spikes
-            for (int i = 0; i < OUTPUT_SIZE; ++i) {
-                aie::vector<float, OUTPUT_LAYER> weight_column = 
-    aie::load_v<OUTPUT_LAYER, aie_dm_resource::a>(inWeightsPtr + i * OUTPUT_LAYER);
-
-                
-                // Multiply and add
-                
-                auto weighted_input_accum = aie::mul(weight_column, v_spikes[i]);
-                weight_column = aie::to_vector<float>(weighted_input_accum);
-                g_membrane_potential = aie::add(g_membrane_potential, weight_column);
-            }
-*/
             int32_t index = 0;
          // 2. Process weights row-wise (one output neuron at a time)
-            for (index = 0; index < 16; ++index) {
+            for (index = 0; index < OUTPUT_SIZE; ++index) {
                 aie::vector<float, OUTPUT_SIZE> weights_column = 
                     aie::load_v<OUTPUT_SIZE>(inWeightsPtr + index * OUTPUT_SIZE);
 
                 float spike_val = hardcoded_retrieve(v_spikes, index);
+                //float spike_val = extract_elem(v_spikes, index);
                 aie::vector<float, OUTPUT_SIZE> v_input = aie::broadcast<float, OUTPUT_SIZE>(spike_val);
             
                 auto weights_input_acc = aie::mul(weights_column, v_input);
@@ -151,7 +138,7 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
             // 7. Store output
             aie::store_v(outPtr, v_output);
             outPtr += OUTPUT_SIZE;
-        //}
+        }
     
    }
 
