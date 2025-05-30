@@ -87,7 +87,7 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
                 auto weights_input_vec = aie::to_vector<float>(weights_input_acc);
                 g_membrane_potential = aie::add(g_membrane_potential, weights_input_vec);
             }
-        
+       
             // 3. Fire mask
             auto v_fire_mask = aie::ge(g_membrane_potential, v_threshold);
        

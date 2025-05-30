@@ -20,7 +20,7 @@ include ${srcdir}/../../makefile-common
 in1_size = 4096
 out_size = 4096 # must be equal to the in1_size
 threshold = 5
-decay_factor = 0.9
+decay_factor = 1.0
 reset = -1
 hard_reset = 1
 trace_size = 8192
@@ -29,19 +29,22 @@ verbosity = 2
 ## Name of the .py array and col of the npu to choose
 
 targetname ?= denselayer
-col = 0
+col = $(if $(filter 1,$(NPU2)),0,1)
 
 devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
 
 ## Choose type of test bench to run
 
-aie_design_test_to_use = 1
+aie_design_test_to_use = 2
 
 ifeq ($(targetname), singlecore)
     aie_design_test_to_use = 0
 endif
 ifeq ($(targetname), multicore)
     aie_design_test_to_use = 1
+endif
+ifeq ($(targetname), denselayer)
+    aie_design_test_to_use = 2
 endif
 
 aie_py_src=${targetname}.py
@@ -76,7 +79,7 @@ build/final.xclbin: build/aie.mlir build/scale.o
 build/final_trace.xclbin: build/aie_trace.mlir build/scale.o
 	mkdir -p ${@D}
 	cd ${@D} && aiecc.py --aie-generate-xclbin --no-compile-host --xclbin-name=${@F} \
-    	--no-xchesscc --no-xbridge --peano ${PEANO_INSTALL_DIR} \
+    	--no-xchesscc --no-xbridge \
 				--aie-generate-npu-insts --npu-insts-name=insts.bin $(<:%=../%)
 
 ${targetname}.exe: ${srcdir}/test.cpp
@@ -94,9 +97,9 @@ run: ${targetname}.exe build/final.xclbin
 	${powershell} ./$< -x build/final.xclbin -i build/insts.bin -k MLIR_AIE --in1_size ${in1_size} --out_size ${out_size} --threshold ${threshold} --decay_factor ${decay_factor} --hard_reset ${hard_reset} -v ${verbosity} --reset ${reset} --aie_design ${aie_design_test_to_use}
 
 trace: ${targetname}.exe build/final_trace.xclbin build/insts.bin 
-	${powershell} ./$< -x build/final_trace.xclbin -i build/insts.bin -k MLIR_AIE -t ${trace_size}
-	${srcdir}/../../../programming_examples/utils/parse_trace.py --filename trace.txt --mlir build/aie_trace.mlir --colshift ${colshift} > trace_4b.json
-	${srcdir}/../../../programming_examples/utils/get_trace_summary.py --filename trace_4b.json
+	${powershell} ./$< -x build/final_trace.xclbin -i build/insts.bin --in1_size ${in1_size} --out_size ${out_size} --threshold ${threshold} --decay_factor ${decay_factor} --hard_reset ${hard_reset} -v ${verbosity} --reset ${reset} --aie_design ${aie_design_test_to_use} -k MLIR_AIE -t ${trace_size}
+	${srcdir}/../../../programming_examples/utils/parse_trace.py --input trace.txt --output trace_${targertname}.json --mlir build/aie_trace.mlir --colshift ${col}
+	${srcdir}/../../../programming_examples/utils/get_trace_summary.py --filename trace_${targetname}.json
 
 clean_trace:
 	rm -rf tmpTrace trace.txt parse*json trace*json
