@@ -27,7 +27,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     output_layer = 4
     membrane_size = 16
     input_all = in1_size // input_spike(0).nbytes
-    output_all = input_all
+    output_all = input_all * 2
     weights_all = (standard_size_layer * standard_size_layer + standard_size_layer * standard_size_layer)
     n_layer = 3 # including input layer
 
@@ -59,7 +59,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     of_in_spikes_L3_L2 = ObjectFifo(mem_tile_ty, name="in_spikes")
 
     # L2 -> L3
-    #of_out_spikes_L2_L3 = ObjectFifo(mem_tile_ty, name="out_spikes")
+    of_out_spikes_L2_L3 = ObjectFifo(mem_tile_ty, name="out_spikes")
 
     # L3 -> L1
     of_in_spikes_L3_L1 = ObjectFifo(input_tile_ty, name="input_spikes")
@@ -90,17 +90,16 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
         name=f"obj_L2_L1_layer",
     )
     
-    """
     # L1 -> L2
     of_out_spikes_L1_L2 = of_out_spikes_L2_L3.prod().join(
-        offsets=[0, hidden_layer_1],
+        offsets=[0, 256],
         obj_types=[
-            hidden_1_output_ty,
-            output_layer_ty
+            output_tile_ty,
+            output_tile_ty
         ],
         names=[f"obj_L1_L2_layer_{i}" for i in range(n_layer - 1)],
     )
-    """
+
 
     # L1 -> L3
     of_out_spikes_L1_L3 = ObjectFifo(output_tile_ty, name="output_layer") 
@@ -130,24 +129,24 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     workers = []
 
     # Define the kernels outside the worker append, or pass them as variables
-    snn_kernel_input_hidden = Kernel("snnNeuronLineSimdInputHidden", "scale.o", [input_tile_ty, output_tile_ty, membrane_ty, membrane_ty, weight_input_hidden_ty, np.int32, np.int32, np.float32, np.float32, np.float32, np.int32, np.int32],)
-    snn_kernel_hidden_output = Kernel("snnNeuronLineSimdHiddenOutput", "scale.o", [input_tile_ty, output_tile_ty, membrane_ty, membrane_ty, weight_hidden_output_ty, np.int32, np.int32, np.float32, np.float32, np.float32, np.int32, np.int32],)
+    snn_kernel_input_hidden = Kernel("snnNeuronLineSimdInputHidden", "scale.o", [input_tile_ty, output_tile_ty, membrane_ty, membrane_ty, weight_input_hidden_ty, np.int32, np.int32, np.float32, np.float32, np.float32, np.int32, np.int32])
+    snn_kernel_hidden_output = Kernel("snnNeuronLineSimdHiddenOutput", "scale.o", [input_tile_ty, output_tile_ty, membrane_ty, membrane_ty, weight_hidden_output_ty, np.int32, np.int32, np.float32, np.float32, np.float32, np.int32, np.int32])
 
 
     # Input -> Hidden_1
-    workers.append(Worker(core_body, fn_args=[of_in_spikes_L2_L1.cons(), of_spikes_hidden_1_output.prod(), of_in_membrane[0].cons(), of_in_membrane[0].prod(), of_in_weight_L2_L1[0].cons(), input_layer, hidden_layer_1, snn_kernel_input_hidden]))
+    workers.append(Worker(core_body, fn_args=[of_in_spikes_L2_L1.cons(), of_out_spikes_L1_L2[0].prod(), of_in_membrane[0].cons(), of_in_membrane[0].prod(), of_in_weight_L2_L1[0].cons(), input_layer, hidden_layer_1, snn_kernel_input_hidden], trace=1))
 
     # Hidden_1 -> Output
-    workers.append(Worker(core_body, fn_args=[of_spikes_hidden_1_output.cons(), of_out_spikes_L1_L3.prod(), of_in_membrane[1].cons(), of_in_membrane[1].prod(), of_in_weight_L2_L1[1].cons(), hidden_layer_1, output_layer, snn_kernel_hidden_output]))
+    workers.append(Worker(core_body, fn_args=[of_out_spikes_L1_L2[0].cons(), of_out_spikes_L1_L2[1].prod(), of_in_membrane[1].cons(), of_in_membrane[1].prod(), of_in_weight_L2_L1[1].cons(), hidden_layer_1, output_layer, snn_kernel_hidden_output], trace=1))
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
     with rt.sequence(input_all_data_ty, weight_tile_all_ty, output_all_data_ty) as (inTensor, weightTensor, outTensor):
-        #rt.enable_trace(trace_size, workers=[worker])
+        rt.enable_trace(trace_size, workers=workers)
         rt.start(*workers)
         rt.fill(of_in_spikes_L3_L2.prod(), inTensor)
         rt.fill(of_in_weights_all_L3_L2.prod(), weightTensor)
-        rt.drain(of_out_spikes_L1_L3.cons(), outTensor, wait=True)
+        rt.drain(of_out_spikes_L2_L3.cons(), outTensor, wait=True)
 
     # Place program components (assign them resources on the device) and generate an MLIR module
     return Program(dev, rt).resolve_program(SequentialPlacer())

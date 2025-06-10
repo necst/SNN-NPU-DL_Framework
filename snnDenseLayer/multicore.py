@@ -71,9 +71,13 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
         names=[f"obj_L1_L2_neuron_{i}" for i in range(n_cores)],
     )
     
-    
+    vectorized = False
+    if(vectorized):
+        unit = "Simd"
+    else:
+        unit = "Scalar"
 
-    lif_neuron_simd = Kernel("snnNeuronLineSimd", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.float32, np.float32, np.float32, np.int32, np.int32],)
+    lif_neuron_simd = Kernel(f"snnNeuronLine{unit}", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.float32, np.float32, np.float32, np.int32, np.int32],)
     
     def core_body(of_in_spikes, of_out_spikes, of_in_membrane, of_out_membrane, lif_neuron):
         init_mem = of_out_membrane.acquire(1)

@@ -20,6 +20,7 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     out_spike = np.float32
     tile_size = 128
     problem_size = in1_size // input_spike(0).nbytes
+    membrane_size = 16
 
     # Assertion
     assert in1_size == out_size, "Input and output size must be the same"
@@ -30,35 +31,54 @@ def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_res
     # Define tensor types
     aie_tile_ty = np.ndarray[(tile_size,), np.dtype[np.int32]]
     all_data_ty = np.ndarray[(problem_size,), np.dtype[np.int32]]
+    membrane_ty = np.ndarray[(membrane_size,), np.dtype[np.float32]]
 
     # Number of sub vector to iterate the worker on
     number_sub_vectors = problem_size // tile_size
 
     # Object fifo declarations
-    of_in_spikes_0 = ObjectFifo(aie_tile_ty, name="in_spikes")
+    of_in_spikes_L3_L1 = ObjectFifo(aie_tile_ty, name="in_spikes")
 
-    of_out_spikes_0 = ObjectFifo(aie_tile_ty, name="out_spikes")
+    of_out_spikes_L1_L3 = ObjectFifo(aie_tile_ty, name="out_spikes")
 
-    lif_neuron_sisd = Kernel("snnNeuronLineInteger", "scale.o", [aie_tile_ty, aie_tile_ty, np.float32, np.float32, np.float32, np.int32, np.int32],)
+    of_in_membrane = ObjectFifo(membrane_ty, name="in_out_membrane", default_depth=2)
 
-    def core_body(of_in_spikes_0, of_out_spikes_0, lif_neuron):
+
+    vectorized = True
+    if(vectorized):
+        unit = "Simd"
+    else:
+        unit = "Scalar"
+
+    lif_neuron = Kernel(f"snnNeuronLine{unit}", "scale.o", [aie_tile_ty, aie_tile_ty, membrane_ty, membrane_ty, np.float32, np.float32, np.float32, np.int32, np.int32],)
+
+    def core_body(of_in_spikes, of_out_spikes, of_in_membrane, of_out_membrane, lif_neuron):
+        init_mem = of_out_membrane.acquire(1)
+        for i in range_(membrane_size):
+            init_mem[i] = 0
+        of_out_membrane.release(1)
         for _ in range_(number_sub_vectors):
-            elem_in_spikes = of_in_spikes_0.acquire(1)
-            elem_out = of_out_spikes_0.acquire(1)
-            lif_neuron(elem_in_spikes, elem_out, threshold, decay_factor, reset, hard_reset, tile_size)
-            of_in_spikes_0.release(1)
-            of_out_spikes_0.release(1)
+            elem_in_spikes = of_in_spikes.acquire(1)
+            elem_out = of_out_spikes.acquire(1)
+            elem_in_membrane = of_in_membrane.acquire(1)
+            elem_out_membrane = of_out_membrane.acquire(1)
+            lif_neuron(elem_in_spikes, elem_out, elem_in_membrane, elem_out_membrane, threshold, decay_factor, reset, hard_reset, tile_size)
+            of_in_spikes.release(1)
+            of_out_spikes.release(1)
+            of_in_membrane.release(1)
+            of_out_membrane.release(1)
+
 
     # Create a worker to run the task
-    worker = Worker(core_body, fn_args=[of_in_spikes_0.cons(), of_out_spikes_0.prod(), lif_neuron_sisd])
+    worker = Worker(core_body, fn_args=[of_in_spikes_L3_L1.cons(), of_out_spikes_L1_L3.prod(), of_in_membrane.cons(), of_in_membrane.prod(), lif_neuron])
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
     with rt.sequence(all_data_ty, all_data_ty) as (inTensor, outTensor):
         #rt.enable_trace(trace_size, workers=[worker])
         rt.start(worker)
-        rt.fill(of_in_spikes_0.prod(), inTensor)
-        rt.drain(of_out_spikes_0.cons(), outTensor, wait=True)
+        rt.fill(of_in_spikes_L3_L1.prod(), inTensor)
+        rt.drain(of_out_spikes_L1_L3.cons(), outTensor, wait=True)
 
     # Place program components (assign them resources on the device) and generate an MLIR module
     return Program(dev, rt).resolve_program(SequentialPlacer())

@@ -20,6 +20,8 @@
 
 constexpr int VECTOR_SIZE = 16;
 
+float membrane_potential = 0;
+
 template <typename T, int N>
 __attribute__((noinline)) 
 void snn_neuron_aie_simd_(int32_t *restrict in, 
@@ -103,11 +105,36 @@ void snn_neuron_aie_simd_(int32_t *restrict in,
     event1();  // Optional profiling/event marker
 }
 
+__attribute__((noinline)) void snnNeuron_aie_integer_(int32_t *restrict in, int32_t *restrict out, float *restrict inMem, float *restrict outMem, const float threshold, float decay_factor, float reset, int32_t hard_reset, const int32_t width){
+    for(int i = 0; i < width; i++)
+    {
+        membrane_potential = membrane_potential * decay_factor + in[i];
+        if(membrane_potential >= threshold)
+        {
+            out[i] = 1;
+            if(hard_reset == 1)
+            {
+                membrane_potential = 0;
+            }else
+            {
+                membrane_potential -= reset;
+            }
+        }
+        else
+        {
+            out[i] = 0;
+        }
+    }
+}
 
 extern "C" {
 
 void snnNeuronLineSimd(int32_t *in, int32_t *out, float *inMem, float *outMem, float threshold, float decay_factor, float reset, int32_t hard_reset, int32_t lineWidth){
   snn_neuron_aie_simd_<int32_t, 16>(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
+}
+
+void snnNeuronLineScalar(int32_t *in, int32_t *out, float *inMem, float *outMem, float threshold, float decay_factor, float reset, int32_t hard_reset, int32_t lineWidth){
+  snnNeuron_aie_integer_(in, out, inMem, outMem, threshold, decay_factor, reset, hard_reset, lineWidth);
 }
 
 } // extern "C"

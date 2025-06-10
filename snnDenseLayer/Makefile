@@ -18,9 +18,9 @@ include ${srcdir}/../../makefile-common
 
 # Input size and output size in byte
 in1_size = 4096
-out_size = 4096 # must be equal to the in1_size
+out_size = 4096
 threshold = 5
-decay_factor = 1.0
+decay_factor = 0.9
 reset = -1
 hard_reset = 1
 trace_size = 8192
@@ -28,14 +28,14 @@ verbosity = 2
 
 ## Name of the .py array and col of the npu to choose
 
-targetname ?= denselayer
+targetname ?= singlecore
 col = $(if $(filter 1,$(NPU2)),0,1)
 
 devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
 
 ## Choose type of test bench to run
 
-aie_design_test_to_use = 2
+aie_design_test_to_use = 0
 
 ifeq ($(targetname), singlecore)
     aie_design_test_to_use = 0
@@ -98,7 +98,7 @@ run: ${targetname}.exe build/final.xclbin
 
 trace: ${targetname}.exe build/final_trace.xclbin build/insts.bin 
 	${powershell} ./$< -x build/final_trace.xclbin -i build/insts.bin --in1_size ${in1_size} --out_size ${out_size} --threshold ${threshold} --decay_factor ${decay_factor} --hard_reset ${hard_reset} -v ${verbosity} --reset ${reset} --aie_design ${aie_design_test_to_use} -k MLIR_AIE -t ${trace_size}
-	${srcdir}/../../../programming_examples/utils/parse_trace.py --input trace.txt --output trace_${targertname}.json --mlir build/aie_trace.mlir --colshift ${col}
+	${srcdir}/../../../programming_examples/utils/parse_trace.py --input trace.txt --output trace_${targetname}.json --mlir build/aie_trace.mlir --colshift ${col}
 	${srcdir}/../../../programming_examples/utils/get_trace_summary.py --filename trace_${targetname}.json
 
 clean_trace:
