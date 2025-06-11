@@ -17,7 +17,7 @@ def compile_snn_neuron(
 ):
 
     # Clean all   
-    subprocess.run(["make", "clean"], check=True)
+    subprocess.run(["make", "clean"], check=True, capture_output=True)
     
     # Execute make to produce the MLIR file and compile the kernel code
     make_cmd = [
@@ -32,7 +32,8 @@ def compile_snn_neuron(
         f"targetname={aie_design_name}",
     ]
 
-    #print("Running:", " ".join(make_cmd))
-    subprocess.run(make_cmd, check=True)
+    process_result = subprocess.run(make_cmd, check=True, capture_output=True, text=True)
+    
+    print(process_result.stderr)
 
     print("Compilation completed. Artifacts generated: build/final.xclbin, build/insts.bin")
