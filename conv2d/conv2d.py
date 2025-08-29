@@ -130,9 +130,9 @@ def conv2dk1(
         # Initialize the runtime parameter values
         def set_rtps(my_rtp):
             #scale
-            my_rtp[0] = 10
+            my_rtp[0] = 0
             #threshold
-            my_rtp[1] = 10
+            my_rtp[1] = 10000
             #reset value
             my_rtp[2] = 0
 
