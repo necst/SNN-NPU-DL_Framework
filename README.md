@@ -31,29 +31,14 @@ This project implements a backend for neuromorphic (spiking) workloads targeting
 
 ## Installation
 
-### 1. Clone MLIR-AIE repository
+> See: Getting Started for AMD Ryzen™ AI on Linux: [https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux](https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux)
+
+Follow the guide and once the env is ready execute the following lines to avoid libraries conflicts.
 
 ```bash
-# clone the upstream MLIR-AIE project
-git clone https://github.com/Xilinx/mlir-aie.git
-
 # move the example source into the expected folder layout
 mv OpenHW_deliver mlir-aie/programming_example/basics
 cd mlir-aie/programming_example/basics/OpenHW_deliver
-```
-
-> See: Getting Started for AMD Ryzen™ AI on Linux: [https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux](https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux)
-
-### 2. Install Python dependencies
-
-Create a virtual environment and install requirements used by this project (example):
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install torch snntorch
-# plus any mlir-aie / iron python packages as required by the repo
 ```
 
 ---
