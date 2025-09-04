@@ -33,12 +33,11 @@ This project implements a backend for neuromorphic (spiking) workloads targeting
 
 > See: Getting Started for AMD Ryzen™ AI on Linux: [https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux](https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux)
 
-Follow the guide and once the env is ready execute the following lines to avoid libraries conflicts.
+Follow the guide and once the env is ready execute the following lines to enter inside the folder where the source code is located.
 
 ```bash
 # move the example source into the expected folder layout
-mv OpenHW_deliver mlir-aie/programming_example/basics
-cd mlir-aie/programming_example/basics/OpenHW_deliver
+cd OpenHW_deliver/
 ```
 
 ---
