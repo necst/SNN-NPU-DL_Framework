@@ -130,15 +130,15 @@ void generateInput(int32_t *buf_in_spikes, int32_t IN_SIZE, args myargs){
 
     // Read input from a txt file produced by the torch wrapper
     std::ifstream infile("input_spikes.txt");
-    if( !infile.is_open()) {
-        std::cerr << "Failed to open the input file\n";
-        return;
-    }
+    //if( !infile.is_open()) {
+    //    std::cerr << "Failed to open the input file\n";
+    //    return;
+    //}
 
     int value;
     int count = 0;
-    while (infile >> value && count < IN_SIZE) {
-        srcVecSpikes.push_back(value);
+    while (count < IN_SIZE) {
+        srcVecSpikes.push_back(1);
         ++count;
     }
     
@@ -184,41 +184,93 @@ int singlecore_testbench(int32_t* buf_in_spikes, uint32_t* buf_out_spikes, args 
     int32_t test = 0;
     int32_t out = 0;
     float decay_factor = myargs.decay_factor;
+
+    int vectorized = 1;
+    if(vectorized == 0)
+    {
+        std::cout << "Verifying results ... Single neuron testbench" << std::endl;
+            
+        for (uint32_t i = 0; i < IN_SIZE; i++) {
+            membrane_potential = buf_in_spikes[i] + membrane_potential * decay_factor;
+            test = buf_out_spikes[i];
+            
+            if (membrane_potential >= myargs.threshold) {
+                out = 1;
+                membrane_potential = 0;
+            } else {
+                out = 0;
+            }
     
-    std::cout << "Verifying results ... Single neuron testbench" << std::endl;
         
-    for (uint32_t i = 0; i < IN_SIZE; i++) {
-        membrane_potential = buf_in_spikes[i] + membrane_potential * decay_factor;
-        test = buf_out_spikes[i];
-        
+        if (out != test) {
+            if (verbosity >= 1)
+                std::cout << "Error in output " << test << " != " << out << std::endl;
+            errors++;
+        } else {
+            if (verbosity >= 1)
+                std::cout << "Correct output " << test << " == " << out << std::endl;
+            }
+        }
+    
+        if (!errors) {
+            std::cout << std::endl << "PASS!" << std::endl << std::endl;
+        return 0;
+        } else {
+            std::cout << std::endl
+                  << errors << " mismatches." << std::endl
+                  << std::endl;
+            std::cout << std::endl << "fail." << std::endl << std::endl;
+        return 1;
+        }
+    }
+    else
+    {
+           auto vstart = std::chrono::system_clock::now();
+
+    const uint32_t NUM_NEURONS = 16;
+    const uint32_t TIME_STEPS = IN_SIZE / NUM_NEURONS;
+
+    for (uint32_t neuron = 0; neuron < NUM_NEURONS; ++neuron) {
+        float membrane_potential = 0;
+
+    for (uint32_t t = 0; t < TIME_STEPS; ++t) {
+        uint32_t index = neuron + t * NUM_NEURONS;
+
+        int32_t input_spike = buf_in_spikes[index];
+        int32_t expected_output;
+        int32_t actual_output = buf_out_spikes[index];
+
+        membrane_potential = membrane_potential * decay_factor;
+        membrane_potential += input_spike;
+
         if (membrane_potential >= myargs.threshold) {
-            out = 1;
+            expected_output = 1;
             membrane_potential = 0;
         } else {
-            out = 0;
+            expected_output = 0;
         }
 
-    
-    if (out != test) {
-        if (verbosity >= 1)
-            std::cout << "Error in output " << test << " != " << out << std::endl;
-        errors++;
+    if (expected_output != actual_output) {
+        if (verbosity >= 1) {
+        std::cout << "Mismatch at neuron " << neuron
+                  << ", time step " << t
+                  << ": expected " << expected_output
+                  << ", got " << actual_output << std::endl;
+        }
+        ++errors;
     } else {
-        if (verbosity >= 1)
-            std::cout << "Correct output " << test << " == " << out << std::endl;
+        if (verbosity >= 2) {
+            std::cout << "Correct at neuron " << neuron
+                  << ", time step " << t
+                  << ": output " << actual_output << std::endl;
+                }
+            }
         }
     }
 
-    if (!errors) {
-        std::cout << std::endl << "PASS!" << std::endl << std::endl;
-    return 0;
-    } else {
-        std::cout << std::endl
-              << errors << " mismatches." << std::endl
-              << std::endl;
-        std::cout << std::endl << "fail." << std::endl << std::endl;
-    return 1;
+    auto vstop = std::chrono::system_clock::now();
     }
+
 
 }
 
