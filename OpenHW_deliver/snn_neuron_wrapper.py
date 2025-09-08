@@ -43,69 +43,15 @@ class base_neuron:
         f"hard_reset={self.hard_reset}",
         f"trace_size={self.trace_size}",
         f"targetname={self.aie_design_name}"],
-        capture_output=True,
         text=True,
-        check=False
         )
-
-        # Save the metrics inside a dictionary and return it.
-        if(self.vectorized):
-            unit = "vectorized"
-        else:
-            unit = "scalar"
-        metrics = {
-            "design":f"{self.aie_design_name}_{unit}" ,
-            "npu_time": None,
-            "throughput": None, # Corrected spelling from 'troughtput'
-            "test_status": "UNKNOWN" # Added for 'PASS'/'fail'
-        }
-
-        stdout_output = process_result.stdout
-
-        # Compile regex patterns for NPU response time, throughput
-        npu_time_pattern = re.compile(r"NPU response time:\s*(\d+\.?\d*)\s*(us)\.?")
-        throughput_pattern = re.compile(r"Throughput:\s*(\d+\.?\d*e?\+?\d*)\s*(operations/second)\.")
-        passed_pattern = re.compile(r"PASS")
-        failed_pattern = re.compile(r"fail")
-
-        # Search for and extract NPU response time
-        npu_time_match = npu_time_pattern.search(stdout_output)
-        if npu_time_match:
-            try:
-                metrics["npu_time"] = float(npu_time_match.group(1))
-                print(f"Extracted NPU response time: {metrics['npu_time']} us")
-            except ValueError:
-                print("Could not parse NPU response time.")
-
-        # Search for and extract throughput
-        throughput_match = throughput_pattern.search(stdout_output)
-        if throughput_match:
-            try:
-                metrics["throughput"] = float(throughput_match.group(1))
-                print(f"Extracted Throughput: {metrics['throughput']} operations/second")
-            except ValueError:
-                print("Could not parse Throughput.")
-
-        # Determine test status
-        if passed_pattern.search(stdout_output):
-            metrics["test_status"] = "PASS"
-            print("Test status: PASS")
-        elif failed_pattern.search(stdout_output):
-            metrics["test_status"] = "FAIL"
-            print("Test status: FAIL")
-        else:
-            print("Test status: Not explicitly found (PASS/fail).")
-
-        # Print errors
-        print(process_result.stderr)
-
         
         with open("output_spikes.txt", "r") as f:
             output_spikes = [int(line.strip()) for line in f if line.strip()]
 
         output_spikes_torch = torch.tensor(output_spikes, dtype=torch.int32)
 
-        return output_spikes_torch, metrics
+        return output_spikes_torch
 
 
 class snn_neuron_npu_multicore(base_neuron):

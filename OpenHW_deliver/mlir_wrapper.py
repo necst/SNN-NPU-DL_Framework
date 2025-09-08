@@ -18,7 +18,7 @@ def compile_snn_neuron(
 ):
 
     # Clean all   
-    subprocess.run(["make", "clean"], check=True, capture_output=True)
+    subprocess.run(["make", "clean"], check=True)
 
     vectorized = 1 if vectorized else 0
     # Execute make to produce the MLIR file and compile the kernel code
@@ -35,7 +35,7 @@ def compile_snn_neuron(
         f"vectorized={vectorized}"
     ]
 
-    process_result = subprocess.run(make_cmd, check=True, capture_output=True, text=True)
+    process_result = subprocess.run(make_cmd, check=True, text=True)
     
     #print(process_result.stderr)
 

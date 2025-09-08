@@ -31,7 +31,7 @@ vectorized = 1
 
 ## Name of the .py array and col of the npu to choose
 
-targetname ?= singlecore
+targetname ?= multicore
 col = $(if $(filter 1,$(NPU2)),0,1)
 
 devicename ?= $(if $(filter 1,$(NPU2)),npu2,npu)
