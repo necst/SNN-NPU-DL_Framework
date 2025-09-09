@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "/Users/vittoriopalladino/Documents/SNN-NPU-DL_Framework/OpenHW_deliver",
+      "program": "/Users/vittoriopalladino/Documents/SNN-NPU-DL_Framework/OpenHW_deliver/build/Debug/outDebug"
+    }
+  ]
+}

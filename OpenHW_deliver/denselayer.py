@@ -14,7 +14,7 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2
 from aie.iron.controlflow import range_
 
-def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_reset, trace_size):
+def snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset, hard_reset, trace_size, vectorized):
 
     standard_size_layer = 16
     input_spike = np.float32
@@ -166,6 +166,7 @@ p.add_argument("-df", "--decay_factor", required=True, dest="decay_factor", help
 p.add_argument("-rs", "--reset", required=True, dest="reset_factor", help="Reset factor")
 p.add_argument("-hr", "--hard_reset", required=True, dest="hard_reset", help="Equal to one for hard reset")
 p.add_argument("-t", "--trace_size", required=False, dest="trace_size", default=0, help="Trace buffer size")
+p.add_argument("-vt", "--vectorized", required=False, dest="vectorized", default=False, help="Choose between vectorization or not")
 
 opts = p.parse_args(sys.argv[1:])
 
@@ -186,8 +187,9 @@ decay_factor = float(opts.decay_factor)
 reset_factor = float(opts.reset_factor)
 hard_reset = int(opts.hard_reset)
 trace_size = int(opts.trace_size)
+vectorized = int(opts.vectorized)
 
-module = snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset_factor, hard_reset, trace_size)
+module = snn_neuron(dev, in1_size, out_size, threshold, decay_factor, reset_factor, hard_reset, trace_size, vectorized)
 res = module.operation.verify()
 if res == True:
     print(module)
