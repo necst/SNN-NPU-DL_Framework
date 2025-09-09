@@ -25,7 +25,6 @@ This project implements a backend for neuromorphic (spiking) workloads targeting
 1. A Linux machine with NPU support (BIOS updated to enable the NPU).
 2. Python 3.10+ (or compatible with SNNtorch and your MLIR tools).
 3. `git`, `make`, and a working C++ toolchain (g++/clang) for the testbench.
-4. Follow the MLIR-AIE repo instructions (below) to install toolchains and dependencies.
 
 ---
 
@@ -33,12 +32,125 @@ This project implements a backend for neuromorphic (spiking) workloads targeting
 
 > See: Getting Started for AMD Ryzen™ AI on Linux: [https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux](https://github.com/Xilinx/mlir-aie#getting-started-for-amd-ryzen-ai-on-linux)
 
-Follow the guide and once the env is ready execute the following lines to enter inside the folder where the source code is located.
+Here i leave the command needed to install the env, taken from the previous link to the mlir repo.
 
-```bash
-# move the example source into the expected folder layout
-cd OpenHW_deliver/
-```
+
+## Initial Setup
+
+  > Be sure you have the latest BIOS on your laptop or mini-PC that enables the NPU. See [here](#update-bios).
+
+If starting from `Ubuntu 24.04` you may need to update the Linux kernel to 6.11+ by installing the Hardware Enablement (HWE) stack:
+
+  ```bash
+  sudo apt update
+  sudo apt install --install-recommends linux-generic-hwe-24.04
+  sudo reboot
+  ```
+
+## Prerequisites
+
+### BIOS Settings:
+
+Turn off SecureBoot (Allows for unsigned drivers to be installed):
+   ```BIOS → Security → Secure boot → Disable```
+
+### Build and install the XDNA™ Driver and XRT
+
+1. Execute the scripted build process:
+
+    > This script will install package dependencies, build the xdna-driver and xrt packages, and install them. *These steps require `sudo` access.*
+
+    ```bash
+    bash ./utils/build_drivers.sh
+    ```
+
+1. Reboot as directed after the script exits.
+
+    ```bash
+    sudo reboot
+    ```
+
+1. Check that the NPU is working if the device appears with xrt-smi:
+
+   ```bash
+   source /opt/xilinx/xrt/setup.sh
+   xrt-smi examine
+   ```
+
+   > At the bottom of the output you should see:
+   >  ```
+   >  Devices present
+   >  BDF             :  Name
+   > ------------------------------------
+   >  [0000:66:00.1]  :  NPU Strix
+   >  ```
+
+### Install IRON and MLIR-AIE Prerequisites
+
+1. Install the following packages needed for MLIR-AIE:
+
+    ```bash
+    # Python versions 3.10, 3.12 and 3.13 are currently supported by our wheels
+    sudo apt install \
+    build-essential clang clang-14 lld lld-14 cmake ninja-build python3-venv python3-pip
+    ```
+
+## Install IRON for AMD Ryzen™ AI AIE Application Development
+
+1. Clone [the mlir-aie repository](https://github.com/Xilinx/mlir-aie.git):
+   ```bash
+   git clone https://github.com/Xilinx/mlir-aie.git
+   cd mlir-aie
+   ```
+
+1. Setup a virtual environment:
+   ```bash
+   python3 -m venv ironenv
+   source ironenv/bin/activate
+   python3 -m pip install --upgrade pip
+   ```
+
+1. Install IRON library, mlir-aie and llvm-aie compilers from wheels and dependencies:
+
+   For release v1.0:
+   ```bash
+   # Install IRON library and mlir-aie from a wheel
+   python3 -m pip install mlir_aie -f https://github.com/Xilinx/mlir-aie/releases/expanded_assets/v1.0
+
+   # Install Peano from a llvm-aie wheel
+   python3 -m pip install https://github.com/Xilinx/llvm-aie/releases/download/nightly/llvm_aie-19.0.0.2025041501+b2a279c1-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+
+   # Install basic Python requirements (still needed for release v1.0, but is no longer needed for latest wheels)
+   python3 -m pip install -r python/requirements.txt
+
+   # Install MLIR Python Extras
+   HOST_MLIR_PYTHON_PACKAGE_PREFIX=aie python3 -m pip install -r python/requirements_extras.txt
+   ```
+
+   For daily latest:
+   ```bash
+   # Install IRON library and mlir-aie from a wheel
+   python3 -m pip install mlir_aie -f https://github.com/Xilinx/mlir-aie/releases/expanded_assets/latest-wheels-2
+
+   # Install Peano from llvm-aie wheel
+   python3 -m pip install llvm-aie -f https://github.com/Xilinx/llvm-aie/releases/expanded_assets/nightly
+
+   # Install MLIR Python Extras
+   HOST_MLIR_PYTHON_PACKAGE_PREFIX=aie python3 -m pip install -r python/requirements_extras.txt
+   ```
+
+
+1. Setup environment
+   ```bash
+   source utils/env_setup.sh
+   ```
+
+
+1. Go inside the delivery folder of the openHW
+  ```bash
+  # move the example source into the expected folder layout
+  cd OpenHW_deliver/
+  ```
 
 ---
 
@@ -58,52 +170,20 @@ make run
 
 ## Jupyter Notebook (alternative run)
 
-A documented Jupyter notebook is included in the repository. To run it:
-
-```bash
-# start jupyter in the repo root
-jupyter lab
-# or
-jupyter notebook
-```
+A documented Jupyter notebook is included in the repository. This will exploit the wrapper written in python to directly call the npu kernel from the notebook, using a small library.
 
 Open the provided notebook and follow the cells to build, compile and run examples using the MLIR-AIE flow.
 
 ---
 
-## Project layout (suggested)
+## Project layout explanation
 
 ```
 / (repo root)
-├─ notebooks/                # examples & experiments (Jupyter)
-├─ snn_primitives/           # Python implementations of neuron, synapse, encoders
-├─ mlir_aie/                 # IRON wrapper code & MLIR generation scripts
-├─ examples/                 # end-to-end SNN models and compilation examples
+├─ OpenHWDelivery
+    └─ Makefile
+    └─ 
 └─ README.md
-```
-
----
-
-## Example usage (Python sketch)
-
-This short sketch shows how to import SNNtorch models and call a hypothetical MLIR-AIE compiler API. Adapt names to the actual API in your repo.
-
-```python
-from snntorch import surrogate
-import torch
-# import your wrapper that lowers to AIE/MLIR
-from mlir_aie import aie_compiler
-
-# build or load an snn model (PyTorch + SNNtorch)
-model = ...  # SNNtorch model
-
-# trace or lower model to MLIR and compile to AIE binary
-aie_module = aie_compiler.lower_model(model, input_shape=(1, 3, 32, 32))
-aie_binary = aie_compiler.compile(aie_module)
-
-# deploy / run on target (NPU) — pseudocode
-aie_compiler.deploy(aie_binary, target='ryzen_ai')
-result = aie_compiler.run_on_target(aie_binary, input_data)
 ```
 
 ---
@@ -113,13 +193,6 @@ result = aie_compiler.run_on_target(aie_binary, input_data)
 * Ensure the BIOS and kernel drivers expose the NPU on your platform.
 * Match PyTorch / SNNtorch versions with your Python version.
 * If `make` fails, inspect the Makefile and required paths in `mlir-aie` — dependencies or environment variables may be missing.
-
----
-
-## Contributing
-
-* Open issues for bugs or feature requests.
-* Make PRs against `main` with a clear description and tests when possible.
 
 ---
 
