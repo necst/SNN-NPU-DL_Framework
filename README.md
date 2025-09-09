@@ -182,7 +182,19 @@ Open the provided notebook and follow the cells to build, compile and run exampl
 / (repo root)
 ├─ OpenHWDelivery
     └─ Makefile
-    └─ 
+    └─ denselayer.py #design for the feedforward network
+    └─ singlecore.py #design for the single aie core 
+    └─ multicore.py #design for the multi aie core
+    └─ lif_kernel_denselayer.cc #kernel implementaion of the feedforward neural network layer
+    └─ lif_kernel_singlecore.cc #implementation of the singlecore kernel (vectorized and scalar)
+    └─ lif_kernel_multicore.cc #implemenation of the multicore kernel (vector and scalar)
+    └─ test.cpp
+    └─ ... The following files have been taken from the repo mlir and has the only role to set up correctly all the utils and library of the AIE cores.
+    └─ cxxopts.hpp #file to 
+    └─ test_utils.cpp
+    └─ test_utils.h
+    └─ makefile-common
+    └─ ...
 └─ README.md
 ```
 
