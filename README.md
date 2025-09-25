@@ -1,10 +1,10 @@
 # Speak, Friend, and Enter — NPU Backend for Neuromorphic Computing
 
 ## Group
-Group number: AOHW25_1026
-Project name: Speak, Friend, and Enter: A NPU Backend for Neuromorphic Computing
-Participant: Palladino Vittorio
-Supervisor: Prof.Davide Conficconi
+* Group number: AOHW25_1026
+* Project name: Speak, Friend, and Enter: A NPU Backend for Neuromorphic Computing
+* Participant: Palladino Vittorio
+* Supervisor: Prof.Davide Conficconi
 
 ## Project Overview
 
