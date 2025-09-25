@@ -101,6 +101,7 @@ Turn off SecureBoot (Allows for unsigned drivers to be installed):
    ```bash
    git clone https://github.com/Xilinx/mlir-aie.git
    cd mlir-aie
+   git checkout bd3b0c899ce536e66efa37718cc0f9d2a77d10e
    ```
 
 1. Setup a virtual environment:
