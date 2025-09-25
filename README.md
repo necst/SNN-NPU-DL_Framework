@@ -1,5 +1,8 @@
 # Speak, Friend, and Enter — NPU Backend for Neuromorphic Computing
 
+## Group
+Group number: AOHW25_1026
+
 ## Project Overview
 
 This project implements a backend for neuromorphic (spiking) workloads targeting the AMD Ryzen™ AI NPU (and optionally GPU) using MLIR / AIE tools and the SNNtorch framework.
